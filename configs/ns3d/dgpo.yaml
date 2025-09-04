@@ -1,0 +1,53 @@
+model:
+  model_name: 'DGPO'
+  in_dim: 4
+  out_dim: 1
+  hidden_dim: 32
+  pos_dim: 3
+  num_layers: 3
+  num_heads: 4
+  num_gaussians: 4
+  gs_path: '/ai/gno/CODE/GPNO/logs/NavierStokes3D/07_03/GaussianField_23_06_29'
+
+data:
+  dataset: 'NavierStokes3D'
+  data_path: "/ai/gno/DATA/ns/3D_CFD_Turb_M1.0_Eta1e-08_Zeta1e-08_periodic_Train.hdf5"
+  sample_factor: [1, 1, 1]
+  train_batchsize: 4
+  eval_batchsize: 4
+  train_ratio: 0.8
+  valid_ratio: 0.1
+  test_ratio: 0.1
+  subset: False
+  subset_ratio: 0.1
+  normalize: True
+  normalizer_type: 'PGN'
+  prop: 'Vx'
+
+train:
+  random_seed: 42
+  cuda: True
+  device: 2
+  epochs: 500
+  patience: -1
+  eval_freq: 1
+  saving_best: True
+  saving_checkpoint: False
+  checkpoint_freq: 100
+
+optimize:
+  optimizer: 'AdamW'
+  lr: 0.001
+  weight_decay: 0.0001
+
+schedule:
+  scheduler: 'StepLR'
+  step_size: 400
+  gamma: 0.5
+
+log:
+  verbose: True
+  log: True
+  log_dir: './logs'
+  wandb: False
+  wandb_project: ''

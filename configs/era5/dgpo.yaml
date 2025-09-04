@@ -1,0 +1,61 @@
+model:
+  model_name: 'DGPO'
+  in_dim: 3
+  out_dim: 1
+  hidden_dim: 64
+  pos_dim: 2
+  num_layers: 3
+  num_heads: 4
+  num_gaussians: 8
+  gs_path: '/ai/gno/CODE/GPNO/logs/ERA5/05_07/GaussianField_23_15_39' # temp
+
+data:
+  dataset: 'ERA5'
+  data_path: "/ai/gno/DATA/era5/20d/era_721_1440.pt"
+  # data_path: "/ai/gno/DATA/era5/20d/era_512_512.pt"
+  prop: 'temp'
+  # prop: 'wind_u'
+  # prop: 'wind_v'
+  # prop: 'vel'
+  raw_resolution: [721, 1440, 24]
+  sample_resolution: [721, 1440, 24]
+  eval_resolution: [721, 1440, 24]
+  in_t: 1
+  out_t: 1
+  duration_t: 23
+  eval_batchsize: 2
+  train_batchsize: 2
+  normalize: True
+  normalizer_type: 'PGN'
+  train_day: 12
+  valid_day: 4
+  test_day: 4
+  sub: False
+
+train:
+  random_seed: 42
+  cuda: True
+  device: 3
+  epochs: 500
+  patience: -1
+  eval_freq: 1
+  saving_best: True
+  saving_checkpoint: False
+  checkpoint_freq: 100
+
+optimize:
+  optimizer: 'AdamW'
+  lr: 0.001
+  weight_decay: 0.0001
+
+schedule:
+  scheduler: 'StepLR'
+  step_size: 400
+  gamma: 0.5
+
+log:
+  verbose: True
+  log: True
+  log_dir: './logs'
+  wandb: False
+  wandb_project: ''
