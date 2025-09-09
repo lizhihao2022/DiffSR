@@ -19,5 +19,6 @@ class FNO2DTrainer(BaseTrainer):
             in_dim=args['in_dim'],
             out_dim=args['out_dim'],
             act=args['act'],
+            upsample_factor=args['upsample_factor'],
             )
         return model

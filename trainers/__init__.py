@@ -1,9 +1,5 @@
-from .gpo import GPOTrainer
-from .dgpo import DGPOTrainer
-from .gs import GSTrainer
+from .fno2d import FNO2DTrainer
 
 TRAINER_DICT = {
-    'GPO': GPOTrainer,
-    'DGPO': DGPOTrainer,
-    'GaussianField': GSTrainer,
+    'FNO2d': FNO2DTrainer,  
 }

@@ -125,11 +125,9 @@ class NavierStokes2DBase(Dataset):
                  **kwargs):
         self.mode = mode
         self.x = x[:, ::sample_factor[0], ::sample_factor[1], :]
-        self.y = y[:, ::sample_factor[0], ::sample_factor[1], :]
-        self.x = self.x.view(x.shape[0], -1, x.shape[-1])
-        self.y = self.y.view(y.shape[0], -1, y.shape[-1])
+        self.y = x[..., -1:]
         self.x_normalizer = x_normalizer
-        self.y_normalizer = y_normalizer
+        self.y_normalizer = x_normalizer
 
     def __len__(self):
         return len(self.x)

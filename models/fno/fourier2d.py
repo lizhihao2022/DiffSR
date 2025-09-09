@@ -1,5 +1,5 @@
 import torch.nn as nn
-from .basics import SpectralConv2d
+from .basics import SpectralConv2d, SpectralUpsampleConv2d
 from .utils import _get_act, add_padding2, remove_padding2
 import torch
 
@@ -19,7 +19,8 @@ class FNO2d(nn.Module):
                  layers=None,
                  in_dim=3, out_dim=1,
                  act='gelu', 
-                 pad_ratio=[0., 0.]):
+                 pad_ratio=[0., 0.],
+                 upsample_factor=[2, 2]):
         super(FNO2d, self).__init__()
         """
         Args:
@@ -38,6 +39,7 @@ class FNO2d(nn.Module):
             assert len(pad_ratio) == 2, 'Cannot add padding in more than 2 directions'
         self.modes1 = modes1
         self.modes2 = modes2
+        self.upsample_factor = upsample_factor
     
         self.pad_ratio = pad_ratio
         # input channel is 3: (a(x, y), x, y)
@@ -52,15 +54,16 @@ class FNO2d(nn.Module):
             for in_size, out_size, mode1_num, mode2_num
             in zip(self.layers, self.layers[1:], self.modes1, self.modes2)])
 
-        self.ws = nn.ModuleList([nn.Conv1d(in_size, out_size, 1)
+        self.ws = nn.ModuleList([nn.Conv1d(in_size, out_size, kernel_size=1)
                                  for in_size, out_size in zip(self.layers, self.layers[1:])])
-
         
+        self.up_sp_conv = SpectralUpsampleConv2d(self.layers[0], self.layers[0], self.modes1[-1], self.modes2[-1], upsample_factor=self.upsample_factor)
+        self.up_ws = nn.ConvTranspose2d(self.layers[0], self.layers[0], kernel_size=3, stride=self.upsample_factor[0], padding=1, output_padding=1)
+
         self.fc1 = nn.Linear(layers[-1], fc_dim)
         self.fc2 = nn.Linear(fc_dim, layers[-1])
         self.fc3 = nn.Linear(layers[-1], out_dim)
         self.act = _get_act(act)
-        # self.sin = Sine()
 
     def forward(self, x):
         '''
@@ -80,16 +83,20 @@ class FNO2d(nn.Module):
         batchsize = x.shape[0]
         x = self.fc0(x)
         x = x.permute(0, 3, 1, 2)   # B, C, X, Y
+        size_x, size_y = x.shape[-2], x.shape[-1]
+        x1 = self.up_sp_conv(x)
+        x2 = self.up_ws(x).view(batchsize, self.layers[0], size_x*self.upsample_factor[0], size_y*self.upsample_factor[1])
+        x = self.act(x1 + x2)
+        # Padding
         x = add_padding2(x, num_pad1, num_pad2)
         size_x, size_y = x.shape[-2], x.shape[-1]
-
+        
         for i, (speconv, w) in enumerate(zip(self.sp_convs, self.ws)):
             x1 = speconv(x)
             x2 = w(x.view(batchsize, self.layers[i], -1)).view(batchsize, self.layers[i+1], size_x, size_y)
             x = x1 + x2
-            # x = x2 + self.sin(x2)
-            if i != length - 1:
-                x = self.act(x)
+            x = self.act(x)
+            
         x = remove_padding2(x, num_pad1, num_pad2)
         x = x.permute(0, 2, 3, 1)
         x = self.fc1(x)

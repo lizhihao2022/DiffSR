@@ -23,8 +23,6 @@ def main():
     
     if args['dataset'] == 'NavierStokes2D':
         ns2d_procedure(args)
-    elif args['dataset'] == 'ERA5':
-        era5_procedure(args)
     else:
         raise NotImplementedError
 

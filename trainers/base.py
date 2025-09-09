@@ -221,81 +221,11 @@ class BaseTrainer:
                 y = y.to('cuda')
                 # compute loss
                 y_pred = model(x).reshape(y.shape)
+                
+                y = eval_loader.dataset.y_normalizer.decode(y.view(y.shape[0], -1, y.shape[-1])).view(y_pred.shape)
+                y_pred = eval_loader.dataset.y_normalizer.decode(y_pred.view(y_pred.shape[0], -1, y_pred.shape[-1])).view(y.shape)
+                
                 data_loss = criterion(y_pred, y)
                 loss = data_loss
                 loss_record.update({"{}_loss".format(split): loss.sum().item()}, n=y_pred.shape[0])
         return loss_record
-
-
-class GraphBaseTrainer(BaseTrainer):
-    def __init__(self, model_name, device, epochs, eval_freq=5, patience=-1,
-                 verbose=False, wandb_log=False, logger=False, saving_best=True, 
-                 saving_checkpoint=False, checkpoint_freq=100, saving_path=None):
-        super().__init__(model_name, device, epochs, eval_freq, patience, 
-                         verbose, wandb_log, logger, saving_best, saving_checkpoint, 
-                         checkpoint_freq, saving_path)
-    
-    def train(self, model, train_loader, optimizer, criterion, scheduler=None, loss_list=None, **kwargs):
-        loss_record = LossRecord(["train_loss"]) if loss_list is None else LossRecord(["train_loss"] + loss_list)
-        model.cuda()
-        model.train()
-        for graph in train_loader:
-            graph = graph.to('cuda')
-            # compute loss
-            y_pred = model(graph).reshape(graph.y.shape)
-            train_loss, loss_dict = self.loss(y_pred, graph.y, criterion, batch=graph.batch, graph=graph, loss_list=loss_list)
-            # compute gradient
-            optimizer.zero_grad()
-            train_loss.backward()
-            optimizer.step()
-            # record loss and update progress bar
-            loss_record.update({"train_loss": train_loss.sum().item()}, n=graph.batch_size)
-            for key, loss in loss_dict.items():
-                loss_record.update({key: loss.sum().item()}, n=graph.batch_size)
-
-        if scheduler is not None:
-            scheduler.step()
-        return loss_record
-    
-    def evaluate(self, model, eval_loader, criterion, split="valid", loss_list=None, **kwargs):
-        loss_record = LossRecord(["{}_loss".format(split)]) if loss_list is None else LossRecord(["{}_loss".format(split)] + loss_list)
-        model.eval()
-        with torch.no_grad():
-            for graph in eval_loader:
-                graph = graph.to('cuda')
-                y_pred = model(graph).reshape(graph.y.shape)
-                eval_loss, loss_dict = self.loss(y_pred, graph.y, criterion, batch=graph.batch, graph=graph, loss_list=loss_list)
-                loss_record.update({"{}_loss".format(split): eval_loss.sum().item()}, n=graph.batch_size)
-                for key, loss in loss_dict.items():
-                    loss_record.update({key: loss.sum().item()}, n=graph.batch_size)
-        return loss_record
-
-    def loss(self, y_pred, y, criterion, batch=None, loss_list=None, **kwargs):
-        loss_dict = {}
-        
-        if batch is None:
-            norms = criterion(y_pred, y)
-            if loss_list is None:
-                norm = norms
-            else:
-                norm = norms[0]
-                for key, loss in zip(loss_list, norms[1:]):
-                    loss_dict[key] = loss
-        else:
-            num_graphs = batch.max().item() + 1
-            norm = torch.zeros(1, device=y.device)
-            if loss_list is not None:
-                loss_dict = {key: torch.zeros(1, device=y.device) for key in loss_list}
-            for i in range(num_graphs):
-                mask = (batch == i)
-                y_pred_batch = y_pred[mask].unsqueeze(0)
-                y_batch = y[mask].unsqueeze(0)
-                norms = criterion(y_pred_batch, y_batch, batch=i, **kwargs)
-                if loss_list is None:
-                    norm += norms
-                else:
-                    norm += norms[0]
-                    for key, loss in zip(loss_list, norms[1:]):
-                        loss_dict[key] += loss
-                
-        return norm, loss_dict
