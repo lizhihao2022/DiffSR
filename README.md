@@ -23,10 +23,9 @@ The datasets include:
 2. Run the following command to train the model:
 
 ```train
-python main.py --config configs/airfoil_time/grapher.yaml
+python main.py --config configs/ns2d/fno.yaml
 ```
 
-We provide `GNOT`, `U-Net` and `MLP` models as baselines. You can add more models and datasets by following the instructions below.
 
 ### Code Structure
 
@@ -34,9 +33,8 @@ The codebase is organized as follows:
 
 - `datasets/`: contains the dataset classes.
 - `models/`: contains the model classes.
-- `trainers/`: contrains the model builder classes and dataset procedure methods:
-    - `builder/`: contains the model builder classes.
-    - `procedure/`: contains the dataset procedure methods.
+- `trainers/`: contrains the model builder classes.
+- `procedures/`: contains the dataset procedure methods.
 - `configs/`: contains the configuration files.
 - `utils/`: contains the utility functions.
 - `main.py`: the main file to run the code.
@@ -64,7 +62,7 @@ from .your_dataset import YourDataset
 
 ### Trainer
 
-Write your model builder in `trainers/builder/` and register it in `trainers/builder/__init__.py` as follows:
+Write your model builder in `trainers/` and register it in `trainers/__init__.py` as follows:
 
 ```python
 from .your_model import YourModelTrainer
@@ -75,11 +73,11 @@ TRAINER_DICT = {
 }
 ```
 
-We provide two default trainers in `trainers/builder/base.py` which can be used for training the model.
+We provide a default trainers in `trainers/base.py` which can be used for training the model.
 
 ### Procedure
 
-Write your dataset procedure in `trainers/procedure/` and register it in `trainers/procedure/__init__.py` as follows:
+Write your dataset procedure in `procedures/` and register it in `procedures/__init__.py` as follows:
 
 ```python
 from .your_dataset import YourDatasetProcedure
