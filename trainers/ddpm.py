@@ -1,118 +1,71 @@
 import os
+
 import torch
+from tqdm import tqdm
 import wandb
 import logging
-import yaml
+from models.ddpm import UNet, GaussianDiffusion
+from utils.loss import LossRecord, calculate_psnr, calculate_ssim
 
-from tqdm import tqdm
-from functools import partial
-from utils.loss import LossRecord
+from .base import BaseTrainer
 
 
-class BaseTrainer:
-    def __init__(self, model_name, device, epochs, eval_freq=5, patience=-1,
-                 verbose=False, wandb_log=False, logger=False, saving_best=True, 
-                 saving_checkpoint=False, checkpoint_freq=100, saving_path=None):
-        self.model_name = model_name
-        self.device = device
-        self.epochs = epochs
-        self.eval_freq = eval_freq
-        self.patience = patience
-        self.wandb = wandb_log
-        self.verbose = verbose
-        self.saving_best = saving_best
-        self.saving_checkpoint = saving_checkpoint
-        self.checkpoint_freq = checkpoint_freq
-        self.saving_path = saving_path
-        if verbose:
-            self.logger = logging.info if logger else print
-    
-    def get_initializer(self, name):
-        if name is None:
-            return None
+class DDPMTrainer(BaseTrainer):
+    def __init__(self, args):
+        super().__init__(model_name=args['model_name'], device=args['device'], epochs=args['epochs'],
+                         eval_freq=args['eval_freq'], patience=args['patience'], verbose=args['verbose'],
+                         wandb_log=args['wandb'], logger=args['log'], saving_best=args['saving_best'],
+                         saving_checkpoint=args['saving_checkpoint'], saving_path=args['saving_path'])
+        self.loss_type = args['loss_type']
+        self.n_iter = args['n_iter']
+        self.step = 0
+        self.beta_schedule = {
+            "train": {
+                "schedule": "linear",
+                "n_timestep": 2000,
+                "linear_start": 1e-4,
+                "linear_end": 2e-2
+            },
+            "val": {
+                "schedule": "linear",
+                "n_timestep": 2000,
+                "linear_start": 1e-4,
+                "linear_end": 2e-2
+            }
+        }
+
+    def build_model(self, args, **kwargs):
+        model = UNet(
+            in_channel=args['in_channel'],
+            out_channel=args['out_channel'],
+            # norm_groups=args['norm_groups'],
+            inner_channel=args['inner_channel'],
+            channel_mults=args['channel_mults'],
+            attn_res=args['attn_res'],
+            res_blocks=args['res_blocks'],
+            dropout=args['dropout'],
+            image_size=args['image_size'],
+            )
+        diffusion = GaussianDiffusion(
+            model,
+            image_size=args['image_size'],
+            channels=args['channels'],
+            loss_type=self.loss_type,
+            conditional=args['conditional'],
+            schedule_opt=self.beta_schedule,
+            )
         
-        if name == 'xavier_normal':
-            init_ = partial(torch.nn.init.xavier_normal_)
-        elif name == 'kaiming_uniform':
-            init_ = partial(torch.nn.init.kaiming_uniform_)
-        elif name == 'kaiming_normal':
-            init_ = partial(torch.nn.init.kaiming_normal_)
-        elif name == 'orthogonal':
-            init_ = partial(torch.nn.init.orthogonal_)
-        else:
-            raise NotImplementedError("Initializer {} not implemented".format(name))
-        return init_
-    
-    def build_optimizer(self, model, args, **kwargs):
-        if args['optimizer'] == 'Adam':
-            optimizer = torch.optim.Adam(
-                model.parameters(),
-                lr=args['lr'],
-                weight_decay=args['weight_decay'],
-            )
-        elif args['optimizer'] == 'SGD':
-            optimizer = torch.optim.SGD(
-                model.parameters(),
-                lr=args['lr'],
-                momentum=args['momentum'],
-                weight_decay=args['weight_decay'],
-            )
-        elif args['optimizer'] == 'AdamW':
-            optimizer = torch.optim.AdamW(
-                model.parameters(),
-                lr=args['lr'],
-                weight_decay=args['weight_decay'],
-            )
-        else:
-            raise NotImplementedError("Optimizer {} not implemented".format(args['optimizer']))
-        return optimizer
-    
-    def build_scheduler(self, optimizer, args, **kwargs):
-        if args['scheduler'] == 'MultiStepLR':
-            scheduler = torch.optim.lr_scheduler.MultiStepLR(
-                optimizer,
-                milestones=args['milestones'],
-                gamma=args['gamma'],
-            )
-        elif args['scheduler'] == 'OneCycleLR':
-            scheduler = torch.optim.lr_scheduler.OneCycleLR(
-                optimizer,
-                max_lr=args['lr'],
-                div_factor=args['div_factor'],
-                final_div_factor=args['final_div_factor'],
-                pct_start=args['pct_start'],
-                steps_per_epoch=args['steps_per_epoch'],
-                epochs=args['epochs'],
-            )
-        elif args['scheduler'] == 'StepLR':
-            scheduler = torch.optim.lr_scheduler.StepLR(
-                optimizer,
-                step_size=args['step_size'],
-                gamma=args['gamma'],
-            )
-        else:
-            raise NotImplementedError("Scheduler {} not implemented".format(args['scheduler']))
-        return scheduler
-    
-    def build_model(self, **kwargs):
-        raise NotImplementedError
-    
-    def load_model(self, path):
-        args_path = os.path.join(path, "config.yaml")
-        model_path = os.path.join(path, "best_model.pth")
-        args = yaml.load(open(args_path), Loader=yaml.FullLoader)
-        model = self.build_model(args)
-        model.load_state_dict(torch.load(model_path))
+        # initializer = self.get_initializer('orthogonal')
+        # diffusion.apply(initializer)
         
-        return model
-    
-    def save_model(self, model, path):
-        if not os.path.exists(path):
-            os.makedirs(path)
-        torch.save(model.state_dict(), os.path.join(path, "model.pth"))
-        if self.verbose:
-            self.logger("Save model to {}".format(path))
+        diffusion.set_new_noise_schedule(
+            self.beta_schedule['train'],
+            device=self.device
+        )
+        diffusion.set_loss(self.device)
 
+        return diffusion
+    
     def process(self, model, train_loader, valid_loader, test_loader, optimizer, 
                 criterion, regularizer=None, scheduler=None, **kwargs):
         if self.verbose:
@@ -193,7 +146,7 @@ class BaseTrainer:
             wandb.run.summary.update(test_loss_record.to_dict())
             
         return model
-
+    
     def train(self, model, train_loader, optimizer, criterion, scheduler=None, **kwargs):
         loss_record = LossRecord(["train_loss"])
         model.cuda()
@@ -202,35 +155,48 @@ class BaseTrainer:
             x = x.to('cuda')
             y = y.to('cuda')
             # compute loss
-            y_pred = model(x).reshape(y.shape)
-            data_loss = criterion(y_pred, y)
-            loss = data_loss
+            x = x.permute(0, 3, 1, 2)  # (b, c, h, w)
+            y = y.permute(0, 3, 1, 2)
+            data = {
+                'SR': x,
+                'HR': y
+            }
+            B, C, H, W = x.shape
+            pix_loss = model(data)
+            loss = pix_loss.sum() / int(B * C * H * W)
             # compute gradient
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             # record loss and update progress bar
-            loss_record.update({"train_loss": loss.sum().item()}, n=y_pred.shape[0])
+            loss_record.update({"train_loss": loss.item()}, n=B)
 
         if scheduler is not None:
             scheduler.step()
         return loss_record
     
-    def evaluate(self, model, eval_loader, criterion, split="valid", **kwargs):
-        loss_record = LossRecord(["{}_loss".format(split)])
+    
+    def evaluate(self, model, eval_loader, criterion, split='val', **kwargs):
+        loss_record = LossRecord(["valid_loss", "PSNR", "SSIM"])
+        model.cuda()
         model.eval()
         with torch.no_grad():
             for (x, y) in eval_loader:
                 x = x.to('cuda')
                 y = y.to('cuda')
                 # compute loss
-                y_pred = model(x).reshape(y.shape)
-                
-                y = eval_loader.dataset.y_normalizer.decode(y.view(y.shape[0], -1, y.shape[-1])).view(y_pred.shape)
-                y_pred = eval_loader.dataset.y_normalizer.decode(y_pred.view(y_pred.shape[0], -1, y_pred.shape[-1])).view(y.shape)
-                
-                data_loss = criterion(y_pred, y)
-                loss = data_loss
-                loss_record.update({"{}_loss".format(split): loss.sum().item()}, n=y_pred.shape[0])
-        return loss_record
+                x = x.permute(0, 3, 1, 2)  # (b, c, h, w)
+                y = y.permute(0, 3, 1, 2)
+                data = {
+                    'SR': x,
+                    'HR': y
+                }
+                B, C, H, W = x.shape
+                y_pred = model.super_resolution(x, continous=False)
+                loss = criterion(y_pred, y)
+                psnr = calculate_psnr(y, y_pred)
+                ssim = calculate_ssim(y, y_pred)
+                loss_record.update({"valid_loss": loss.sum().item(), "PSNR": psnr, "SSIM": ssim}, n=B)
+                break
 
+        return loss_record

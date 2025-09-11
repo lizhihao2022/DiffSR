@@ -227,7 +227,7 @@ class GaussianDiffusion(nn.Module):
         if continous:
             return ret_img
         else:
-            return ret_img[-1]
+            return img
 
     @torch.no_grad()
     def sample(self, batch_size=1, continous=False):
@@ -237,6 +237,7 @@ class GaussianDiffusion(nn.Module):
 
     @torch.no_grad()
     def super_resolution(self, x_in, continous=False):
+        x_in = F.interpolate(x_in, size=(self.image_size, self.image_size), mode='bilinear', align_corners=None)
         return self.p_sample_loop(x_in, continous)
 
     @torch.no_grad()
@@ -287,8 +288,9 @@ class GaussianDiffusion(nn.Module):
         if not self.conditional:
             x_recon = self.denoise_fn(x_noisy, t)
         else:
+            x_sr = F.interpolate(x_in['SR'], size=(h, w), mode='bilinear', align_corners=None)
             x_recon = self.denoise_fn(
-                torch.cat([x_in['SR'], x_noisy], dim=1), t)
+                torch.cat([x_sr, x_noisy], dim=1), t)
         loss = self.loss_func(noise, x_recon)
 
         return loss

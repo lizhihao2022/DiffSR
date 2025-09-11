@@ -36,6 +36,7 @@ def ns2d_procedure(args):
         test_ratio=args['test_ratio'],
         normalize=args['normalize'],
         normalizer_type=args['normalizer_type'],
+        subset=args['subset'],
     )
     train_loader = dataset.train_loader
     valid_loader = dataset.valid_loader

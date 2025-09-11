@@ -147,66 +147,38 @@ class LossRecord:
         return self.loss_dict[self.loss_list[0]].avg
 
 
-def weight_sparsity_loss(weight):
+def calculate_psnr(x, y):
     """
-    weight: [B, N, 1] (经过sigmoid激活)
+    x: (b, c, h, w)
+    y: (b, c, h, w)
     """
-    # L1正则化
-    l1_loss = torch.abs(weight).mean()
-    
-    # 熵正则化 (避免单个粒子权重过高)
-    entropy = - (weight * torch.log(weight + 1e-8)).sum(dim=1).mean()
-    
-    return 0.1 * l1_loss + 0.01 * entropy
+    mse = F.mse_loss(x, y, reduction='mean')
+    psnr = 20 * torch.log10(1.0 / torch.sqrt(torch.tensor(mse)))
+    return psnr.item()
 
 
-def mu_boundary_loss(mu, domain_min, domain_max):
+def ssim(x, y):
+    C1 = 0.01 ** 2
+    C2 = 0.03 ** 2
+
+    mu_x = F.avg_pool2d(x, 3, 1, 1)
+    mu_y = F.avg_pool2d(y, 3, 1, 1)
+
+    sigma_x = F.avg_pool2d(x * x, 3, 1, 1) - mu_x * mu_x
+    sigma_y = F.avg_pool2d(y * y, 3, 1, 1) - mu_y * mu_y
+    sigma_xy = F.avg_pool2d(x * y, 3, 1, 1) - mu_x * mu_y
+
+    SSIM_n = (2 * mu_x * mu_y + C1) * (2 * sigma_xy + C2)
+    SSIM_d = (mu_x * mu_x + mu_y * mu_y + C1) * (sigma_x + sigma_y + C2)
+
+    ssim_map = SSIM_n / SSIM_d
+    return ssim_map.mean()
+
+
+def calculate_ssim(x, y):
     """
-    mu: [B, N, pos_dim]
-    domain_min/max: [pos_dim]
+    x: (b, c, h, w)
+    y: (b, c, h, w)
     """
-    lower_violation = torch.relu(domain_min - mu)  # mu < domain_min 的正值
-    upper_violation = torch.relu(mu - domain_max)  # mu > domain_max 的正值
-    loss = (lower_violation**2 + upper_violation**2).mean()
-    return loss
-
-
-def chamfer_loss(x, y):
-    dist_sq = ((x.unsqueeze(2) - y.unsqueeze(1)) ** 2).sum(dim=-1)
-    forward = dist_sq.min(dim=2).values.mean()
-    backward = dist_sq.min(dim=1).values.mean()
-
-    return forward + backward
-
-
-def gaussian_params_loss(pred, target):
-    crit = LpLoss(p=2, d=2)
-    
-    mu_pred = pred['mu']
-    log_scale_pred = pred['scale']
-    rot_pred = pred['rotation']
-    weights_pred = pred['weights']
-    
-    mu_true = target['mu']
-    scale_true = target['scale']
-    rot_true = target['rotation']
-    weights_true = target['weights']
-
-    loss = crit(mu_pred, mu_true)
-    loss += crit(log_scale_pred, scale_true)
-    loss += crit(rot_pred, rot_true)
-    loss += crit(weights_pred, weights_true)
-    
-    return loss
-
-
-def kl_diag_gaussian(mu_p, sigma_p, mu_q, sigma_q, eps=1e-6):
-    var_p = sigma_p ** 2
-    var_q = sigma_q ** 2
-
-    trace_term = var_p / var_q
-    diff_term = (mu_q - mu_p) ** 2 / var_q
-    log_term = 2 * (torch.log(sigma_q + eps) - torch.log(sigma_p + eps))
-    kl = 0.5 * ((trace_term + diff_term - 1 + log_term).sum(dim=-1))  # sum over d
-
-    return kl.mean() # mean over batch
+    ssim_value = ssim(x, y).item()
+    return ssim_value

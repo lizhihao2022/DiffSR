@@ -14,12 +14,12 @@ class NavierStokes2DDataset:
     def __init__(self, data_path, sample_factor=[1, 1],
                  train_batchsize=10, eval_batchsize=10, 
                  train_ratio=0.8, valid_ratio=0.1, test_ratio=0.1, 
-                 normalize=True, normalizer_type='PGN', **kwargs):
+                 subset=None, normalize=True, normalizer_type='PGN', **kwargs):
         self.load_data(data_path=data_path, 
                        train_ratio=train_ratio, valid_ratio=valid_ratio, test_ratio=test_ratio, 
                        sample_factor=sample_factor,
                        normalize=normalize, normalizer_type=normalizer_type)
-
+        
         self.train_loader = DataLoader(self.train_dataset, batch_size=train_batchsize, shuffle=True)
         self.valid_loader = DataLoader(self.valid_dataset, batch_size=eval_batchsize, shuffle=False)
         self.test_loader = DataLoader(self.test_dataset, batch_size=eval_batchsize, shuffle=False)
@@ -124,7 +124,7 @@ class NavierStokes2DBase(Dataset):
                  x_normalizer=None, y_normalizer=None, sample_factor=[1, 1],
                  **kwargs):
         self.mode = mode
-        self.x = x[:, ::sample_factor[0], ::sample_factor[1], :]
+        self.x = x[:, ::sample_factor[0], ::sample_factor[1], -1:]
         self.y = x[..., -1:]
         self.x_normalizer = x_normalizer
         self.y_normalizer = x_normalizer
