@@ -1,7 +1,38 @@
 import torch
 import torch.nn.functional as F
 from time import time
+import torch.distributed as dist
 
+_loss_dict = {
+    
+}
+
+
+class CompositeLoss:
+    """
+    组合损失：传入 {name: weight}，自动求和并返回总损失与分项日志
+    """
+    def __init__(self, spec: dict[str, float]):  # e.g. {"l1":1.0,"l2":0.1,"physics":0.5}
+        self.loss_list = ["total_loss", "l2", "l1"]
+        self.init_record()
+
+    def __call__(self, pred, target, *, batch_size: int | None = None, **batch):
+        logs = {}
+        total = 0.0
+        for name, w in self.spec.items():
+            if w == 0: 
+                continue
+            fn = LOSS_REGISTRY[name]
+            val = fn(pred, target, **batch)  # 标量（已mean）
+            total = total + w * val
+            logs[name] = float(val.detach().item())
+        logs["loss_total"] = float(total.detach().item())
+        if record is not None and batch_size is not None:
+            record.update(logs, n=batch_size)
+        return total  # 用于 backward
+
+    def init_record(self):
+        self.record = LossRecord(self.loss_list)
 
 class LpLoss(object):
     '''
@@ -51,49 +82,6 @@ class LpLoss(object):
         return self.rel(x, y)
 
 
-class CarCFDLoss(object):
-    def __init__(self, d=2, p=2, size_average=True, reduction=True):
-        super(CarCFDLoss, self).__init__()
-
-        self.lp_loss = LpLoss(d=d, p=p, size_average=size_average, reduction=reduction)
-
-    def compute_loss(self, x, y, batch, graph, sep=True, **kwargs):
-        mask = (graph.batch == batch)
-        surf = graph.surf[mask]
-        press_loss = self.lp_loss(x[:, surf, -1], y[:, surf, -1])
-        vol_loss = self.lp_loss(x[:, :, :-1], y[:, :, :-1])
-        
-        if sep:
-            return [press_loss + vol_loss, press_loss, vol_loss]
-        else:
-            return press_loss + vol_loss
-    
-    def __call__(self, x, y, **kwargs):
-        return self.compute_loss(x, y, **kwargs)
-
-
-class MultipleLoss(object):
-    def __init__(self, d=2, p=2, size_average=True, reduction=True):
-        
-        self.lp_loss = LpLoss(d=d, p=p, size_average=size_average, reduction=reduction)
-    
-    def compute_loss(self, x, y, sep=True, **kwargs):
-        num_feature = x.size(2)
-        loss_list = []
-        for i in range(num_feature):
-            loss_list.append(self.lp_loss(x[:, :, i], y[:, :, i]))
-        
-        all_loss = sum(loss_list)
-        
-        if sep:
-            return [all_loss] + loss_list
-        else:
-            return all_loss
-    
-    def __call__(self, x, y, **kwargs):
-        return self.compute_loss(x, y, **kwargs)
-
-
 class AverageRecord(object):
     """Computes and stores the average and current values for multidimensional data"""
 
@@ -139,46 +127,40 @@ class LossRecord:
         return {
             loss: self.loss_dict[loss].avg for loss in self.loss_list
         }
+        
+    def dist_reduce(self, device=None):
+        if not (dist.is_available() and dist.is_initialized()):
+            return
+
+        device = device if device is not None else (
+            torch.device("cuda", torch.cuda.current_device())
+            if torch.cuda.is_available() else torch.device("cpu")
+        )
+
+        for loss in self.loss_list:
+            # 打包 sum 与 count，一次 all_reduce 两次也行，这里演示两次更直观
+            t_sum = torch.tensor(self.loss_dict[loss].sum, dtype=torch.float32, device=device)
+            t_cnt = torch.tensor(self.loss_dict[loss].count, dtype=torch.float32, device=device)
+
+            dist.all_reduce(t_sum, op=dist.ReduceOp.SUM)
+            dist.all_reduce(t_cnt, op=dist.ReduceOp.SUM)
+
+            global_sum = t_sum.item()
+            global_cnt = t_cnt.item()
+
+            # 防止除零（极端情况：全局没有任何样本）
+            if global_cnt > 0:
+                self.loss_dict[loss].sum = global_sum
+                self.loss_dict[loss].count = global_cnt
+                self.loss_dict[loss].avg = global_sum / global_cnt
+            else:
+                # 保持为 0，或设为 NaN/Inf 按需处理
+                self.loss_dict[loss].sum = 0.0
+                self.loss_dict[loss].count = 0
+                self.loss_dict[loss].avg = 0.0
     
     def __str__(self):
         return self.format_metrics()
     
     def __repr__(self):
         return self.loss_dict[self.loss_list[0]].avg
-
-
-def calculate_psnr(x, y):
-    """
-    x: (b, c, h, w)
-    y: (b, c, h, w)
-    """
-    mse = F.mse_loss(x, y, reduction='mean')
-    psnr = 20 * torch.log10(1.0 / torch.sqrt(torch.tensor(mse)))
-    return psnr.item()
-
-
-def ssim(x, y):
-    C1 = 0.01 ** 2
-    C2 = 0.03 ** 2
-
-    mu_x = F.avg_pool2d(x, 3, 1, 1)
-    mu_y = F.avg_pool2d(y, 3, 1, 1)
-
-    sigma_x = F.avg_pool2d(x * x, 3, 1, 1) - mu_x * mu_x
-    sigma_y = F.avg_pool2d(y * y, 3, 1, 1) - mu_y * mu_y
-    sigma_xy = F.avg_pool2d(x * y, 3, 1, 1) - mu_x * mu_y
-
-    SSIM_n = (2 * mu_x * mu_y + C1) * (2 * sigma_xy + C2)
-    SSIM_d = (mu_x * mu_x + mu_y * mu_y + C1) * (sigma_x + sigma_y + C2)
-
-    ssim_map = SSIM_n / SSIM_d
-    return ssim_map.mean()
-
-
-def calculate_ssim(x, y):
-    """
-    x: (b, c, h, w)
-    y: (b, c, h, w)
-    """
-    ssim_value = ssim(x, y).item()
-    return ssim_value

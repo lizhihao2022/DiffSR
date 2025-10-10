@@ -1,7 +1,8 @@
-from .fno2d import FNO2DTrainer
+from .base import BaseTrainer
 from .ddpm import DDPMTrainer
 
-TRAINER_DICT = {
-    'FNO2d': FNO2DTrainer,  
+_trainer_dict = {
+    'FNO2d': BaseTrainer,
+    'UNet2d': BaseTrainer, 
     'DDPM': DDPMTrainer,
 }

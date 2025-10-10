@@ -14,13 +14,7 @@ class Sine(torch.nn.Module):
 
 
 class FNO2d(nn.Module):
-    def __init__(self, modes1, modes2,
-                 width=64, fc_dim=128,
-                 layers=None,
-                 in_dim=3, out_dim=1,
-                 act='gelu', 
-                 pad_ratio=[0., 0.],
-                 upsample_factor=[2, 2]):
+    def __init__(self, model_params):
         super(FNO2d, self).__init__()
         """
         Args:
@@ -33,6 +27,17 @@ class FNO2d(nn.Module):
             - pad_ratio: list of float, or float; portion of domain to be extended. If float, paddings are added to the right. 
             If list, paddings are added to both sides. pad_ratio[0] pads left, pad_ratio[1] pads right. 
         """
+        modes1 = model_params['modes1']
+        modes2 = model_params['modes2']
+        width = model_params.get('width', 64)
+        fc_dim = model_params.get('fc_dim', 128)
+        in_dim = model_params.get('in_dim', 3)
+        out_dim = model_params.get('out_dim', 1)
+        layers = model_params.get('layers', [16, 24, 24, 32, 32])
+        act = model_params.get('act', 'gelu')
+        pad_ratio = model_params.get('pad_ratio', [0., 0.])
+        upsample_factor = model_params.get('upsample_factor', [2, 2])
+        
         if isinstance(pad_ratio, float):
             pad_ratio = [pad_ratio, pad_ratio]
         else:

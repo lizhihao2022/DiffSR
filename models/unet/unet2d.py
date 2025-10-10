@@ -5,11 +5,15 @@ from collections import OrderedDict
 
 
 class UNet2d(nn.Module):
-
-    def __init__(self, in_channels=3, out_channels=1, init_features=32):
+    def __init__(self, args):
         super(UNet2d, self).__init__()
+        in_channels = args.get('in_channels', 3)
+        out_channels = args.get('out_channels', 1)
+        init_features = args.get('init_features', 32)
 
         features = init_features
+        self.up_sample = nn.Upsample(scale_factor=2, mode="nearest")
+        
         self.encoder1 = UNet2d._block(in_channels, features, name="enc1")
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.encoder2 = UNet2d._block(features, features * 2, name="enc2")
@@ -43,7 +47,9 @@ class UNet2d(nn.Module):
         )
 
     def forward(self, x):
+        x = x.contiguous()
         x = x.permute(0, 3, 1, 2)
+        x = self.up_sample(x)
         enc1 = self.encoder1(x)
         enc2 = self.encoder2(self.pool1(enc1))
         enc3 = self.encoder3(self.pool2(enc2))

@@ -1,22 +1,15 @@
 model:
-  name: 'FNO2d'
-  modes1: [15, 12, 9, 9, 9]
-  modes2: [15, 12, 9, 9, 9]
-  width: 64
-  fc_dim: 128
-  layers: [16, 24, 24, 32, 32]
-  in_dim: 1
-  out_dim: 1
-  act: 'gelu'
-  pos_dim: 2
-  upsample_factor: [2, 2]
+  name: 'UNet2d'
+  in_channels: 1
+  out_channels: 1
+  init_features: 32
 
 data:
   name: 'NavierStokes2D'
   data_path: "/ai/gno/DATA/ns/ns_V1e-5_N1200_T20.mat"
   sample_factor: 2
-  train_batchsize: 128
-  eval_batchsize: 128
+  train_batchsize: 1024
+  eval_batchsize: 1024
   train_ratio: 0.8
   valid_ratio: 0.1
   test_ratio: 0.1
@@ -24,21 +17,22 @@ data:
   subset_ratio: 0.1
   normalize: True
   normalizer_type: 'PGN'
+  num_workers: 2
 
 train:
   random_seed: 42
   cuda: True
   device: 0
-  epochs: 500
+  epochs: 20
   patience: 10
-  eval_freq: 5
+  eval_freq: 10
   saving_best: True
   load_ckpt: False
   saving_ckpt: True
-  ckpt_freq: 5
+  ckpt_freq: 10
   ckpt_max: 5
-  distribute: True
-  distribute_mode: 'DDP'
+  distribute: False
+  distribute_mode: 'DP'
   device_ids: [0, 1, 2, 3]
 
 optimize:

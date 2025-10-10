@@ -27,11 +27,16 @@ class UnitGaussianNormalizer(nn.Module):
             if len(self.mean.shape) > len(sample_idx[0].shape):
                 std = self.std[:,sample_idx]+ self.eps # T*batch*n
                 mean = self.mean[:,sample_idx]
-
+        B = x.shape[0]
+        C = x.shape[-1]
+        shape = x.shape
+        x = x.view(B, -1, C)
+        
         # x is in shape of batch*n or T*batch*n
         std = std.to(x.device)
         mean = mean.to(x.device)
         x = (x * std) + mean
+        x = x.view(*shape)
         return x
 
 
@@ -49,5 +54,9 @@ class GaussianNormalizer(nn.Module):
         return x
 
     def decode(self, x, sample_idx=None):
+        B = x.shape[0]
+        C = x.shape[-1]
+        shape = x.shape
+        x = x.view(B, -1, 1)
         x = (x * (self.std + self.eps)) + self.mean
-        return x
+        return x.view(*shape)

@@ -2,31 +2,102 @@ import os
 import torch
 import wandb
 import logging
-import yaml
+
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from tqdm import tqdm
+from utils.loss import LossRecord, CompositeLoss, LpLoss
+from utils.helper import save_code
+from utils.ddp import debug_barrier
 from functools import partial
-from utils.loss import LossRecord
+from models import _model_dict
+from datasets import _dataset_dict
 
 
 class BaseTrainer:
-    def __init__(self, model_name, device, epochs, eval_freq=5, patience=-1,
-                 verbose=False, wandb_log=False, logger=False, saving_best=True, 
-                 saving_checkpoint=False, checkpoint_freq=100, saving_path=None):
-        self.model_name = model_name
-        self.device = device
-        self.epochs = epochs
-        self.eval_freq = eval_freq
-        self.patience = patience
-        self.wandb = wandb_log
-        self.verbose = verbose
-        self.saving_best = saving_best
-        self.saving_checkpoint = saving_checkpoint
-        self.checkpoint_freq = checkpoint_freq
-        self.saving_path = saving_path
-        if verbose:
-            self.logger = logging.info if logger else print
-    
+    def __init__(self, args):
+        self.args = args
+        self.model_args = args['model']
+        self.data_args = args['data']
+        self.optim_args = args['optimize']
+        self.scheduler_args = args['schedule']
+        self.train_args = args['train']
+        self.log_args = args['log']
+        
+        self.set_distribute()
+
+        self.logger = logging.info if self.log_args.get('log', True) else print
+        self.wandb = self.log_args.get('wandb', False)
+        if self.check_main_process() and self.wandb:
+            wandb.init(
+                project=self.log_args.get('wandb_project', 'default'), 
+                name=self.train_args.get('saving_name', 'experiment'),
+                tags=[self.model_args.get('name', 'model'), self.data_args.get('name', 'dataset')],
+                config=args)
+        
+        self.model_name = self.model_args['name']
+        self.main_log("Building {} model".format(self.model_name))
+        self.model = self.build_model()
+        if self.train_args.get('load_ckpt', False):
+            self.load_ckpt(self.train_args['ckpt_path'])
+            self.main_log("Load model from {}".format(self.train_args['ckpt_path']))
+        self.model = self.model.to(self.device)
+        
+        if self.dist:
+            if self.dist_mode == 'DP':
+                self.device_ids = self.train_args.get('device_ids', range(torch.cuda.device_count()))
+                self.model = torch.nn.DataParallel(self.model, device_ids=self.device_ids)
+                self.main_log("Using DataParallel with GPU: {}".format(self.device_ids))
+            elif self.dist_mode == 'DDP':
+                self.local_rank = self.train_args.get('local_rank', 0)
+                torch.cuda.set_device(self.local_rank)
+                self.model = self.model.to(self.local_rank)
+                self.model = DDP(
+                    self.model, 
+                    device_ids=[self.local_rank], 
+                    output_device=self.local_rank)
+        
+        for p in self.model.parameters():
+            if not p.is_contiguous():
+                p.data = p.data.contiguous()
+        
+        self.optimizer = self.build_optimizer()
+        self.scheduler = self.build_scheduler()
+        self.loss_fn = self.build_loss()
+
+        self.main_log("Model: {}".format(self.model))
+        self.main_log("Model parameters: {:.2f}M".format(sum(p.numel() for p in self.model.parameters()) / 1e6))
+        self.main_log("Optimizer: {}".format(self.optimizer))
+        self.main_log("Scheduler: {}".format(self.scheduler))
+
+        self.data = self.data_args['name']
+        self.main_log("Loading {} dataset".format(self.data))
+        self.build_data()
+        self.main_log("Train dataset size: {}".format(len(self.train_loader.dataset)))
+        self.main_log("Valid dataset size: {}".format(len(self.valid_loader.dataset)))
+        self.main_log("Test dataset size: {}".format(len(self.test_loader.dataset)))
+
+        self.epochs = self.train_args['epochs']
+        self.eval_freq = self.train_args['eval_freq']
+        self.patience = self.train_args['patience']
+        
+        self.saving_best = self.train_args.get('saving_best', True)
+        self.saving_ckpt = self.train_args.get('saving_ckpt', False)
+        self.ckpt_freq = self.train_args.get('ckpt_freq', 100)
+        self.ckpt_max = self.train_args.get('ckpt_max', 5)
+        self.saving_path = self.train_args.get('saving_path', None)
+
+    def set_distribute(self):
+        self.dist = self.train_args.get('distribute', False)
+        if self.dist:
+            self.dist_mode = self.train_args.get('distribute_mode', 'DDP')
+        if self.dist and self.dist_mode == 'DDP':
+            self.local_rank = self.train_args.get('local_rank', 0)
+            self.device = torch.device(f"cuda:{self.local_rank}" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            
     def get_initializer(self, name):
         if name is None:
             return None
@@ -37,200 +108,269 @@ class BaseTrainer:
             init_ = partial(torch.nn.init.kaiming_uniform_)
         elif name == 'kaiming_normal':
             init_ = partial(torch.nn.init.kaiming_normal_)
-        elif name == 'orthogonal':
-            init_ = partial(torch.nn.init.orthogonal_)
-        else:
-            raise NotImplementedError("Initializer {} not implemented".format(name))
         return init_
-    
-    def build_optimizer(self, model, args, **kwargs):
-        if args['optimizer'] == 'Adam':
+
+    def build_optimizer(self, **kwargs):
+        if self.optim_args['optimizer'] == 'Adam':
             optimizer = torch.optim.Adam(
-                model.parameters(),
-                lr=args['lr'],
-                weight_decay=args['weight_decay'],
+                self.model.parameters(),
+                lr=self.optim_args['lr'],
+                weight_decay=self.optim_args['weight_decay'],
             )
-        elif args['optimizer'] == 'SGD':
+        elif self.optim_args['optimizer'] == 'SGD':
             optimizer = torch.optim.SGD(
-                model.parameters(),
-                lr=args['lr'],
-                momentum=args['momentum'],
-                weight_decay=args['weight_decay'],
+                self.model.parameters(),
+                lr=self.optim_args['lr'],
+                momentum=self.optim_args['momentum'],
+                weight_decay=self.optim_args['weight_decay'],
             )
-        elif args['optimizer'] == 'AdamW':
+        elif self.optim_args['optimizer'] == 'AdamW':
             optimizer = torch.optim.AdamW(
-                model.parameters(),
-                lr=args['lr'],
-                weight_decay=args['weight_decay'],
+                self.model.parameters(),
+                lr=self.optim_args['lr'],
+                weight_decay=self.optim_args['weight_decay'],
             )
         else:
-            raise NotImplementedError("Optimizer {} not implemented".format(args['optimizer']))
+            raise NotImplementedError("Optimizer {} not implemented".format(self.optim_args['optimizer']))
         return optimizer
     
-    def build_scheduler(self, optimizer, args, **kwargs):
-        if args['scheduler'] == 'MultiStepLR':
+    def build_scheduler(self, **kwargs):
+        if self.scheduler_args['scheduler'] == 'MultiStepLR':
             scheduler = torch.optim.lr_scheduler.MultiStepLR(
-                optimizer,
-                milestones=args['milestones'],
-                gamma=args['gamma'],
+                self.optimizer,
+                milestones=self.scheduler_args['milestones'],
+                gamma=self.scheduler_args['gamma'],
             )
-        elif args['scheduler'] == 'OneCycleLR':
+        elif self.scheduler_args['scheduler'] == 'OneCycleLR':
             scheduler = torch.optim.lr_scheduler.OneCycleLR(
-                optimizer,
-                max_lr=args['lr'],
-                div_factor=args['div_factor'],
-                final_div_factor=args['final_div_factor'],
-                pct_start=args['pct_start'],
-                steps_per_epoch=args['steps_per_epoch'],
-                epochs=args['epochs'],
+                self.optimizer,
+                max_lr=self.optim_args['lr'],
+                div_factor=self.scheduler_args['div_factor'],
+                final_div_factor=self.scheduler_args['final_div_factor'],
+                pct_start=self.scheduler_args['pct_start'],
+                steps_per_epoch=self.scheduler_args['steps_per_epoch'],
+                epochs=self.train_args['epochs'],
             )
-        elif args['scheduler'] == 'StepLR':
+        elif self.scheduler_args['scheduler'] == 'StepLR':
             scheduler = torch.optim.lr_scheduler.StepLR(
-                optimizer,
-                step_size=args['step_size'],
-                gamma=args['gamma'],
+                self.optimizer,
+                step_size=self.scheduler_args['step_size'],
+                gamma=self.scheduler_args['gamma'],
             )
         else:
-            raise NotImplementedError("Scheduler {} not implemented".format(args['scheduler']))
+            scheduler = None
+            if self.scheduler_args['scheduler'] is not None:
+                raise NotImplementedError("Scheduler {} not implemented".format(self.scheduler_args['scheduler']))
+            
         return scheduler
     
     def build_model(self, **kwargs):
-        raise NotImplementedError
-    
-    def load_model(self, path):
-        args_path = os.path.join(path, "config.yaml")
-        model_path = os.path.join(path, "best_model.pth")
-        args = yaml.load(open(args_path), Loader=yaml.FullLoader)
-        model = self.build_model(args)
-        model.load_state_dict(torch.load(model_path))
-        
+        if self.model_name not in _model_dict:
+            raise NotImplementedError("Model {} not implemented".format(self.model_name))
+        model = _model_dict[self.model_name](self.model_args)
         return model
     
-    def save_model(self, model, path):
-        if not os.path.exists(path):
-            os.makedirs(path)
-        torch.save(model.state_dict(), os.path.join(path, "model.pth"))
-        if self.verbose:
-            self.logger("Save model to {}".format(path))
-
-    def process(self, model, train_loader, valid_loader, test_loader, optimizer, 
-                criterion, regularizer=None, scheduler=None, **kwargs):
-        if self.verbose:
-            self.logger("Start training")
-            self.logger("Train dataset size: {}".format(len(train_loader.dataset)))
-            self.logger("Valid dataset size: {}".format(len(valid_loader.dataset)))
-            self.logger("Test dataset size: {}".format(len(test_loader.dataset)))
-
+    def build_loss(self, **kwargs):
+        loss_fn = LpLoss()
+        return loss_fn
+    
+    def build_data(self, **kwargs):
+        if self.data_args['name'] not in _dataset_dict:
+            raise NotImplementedError("Dataset {} not implemented".format(self.data_args['name']))
+        dataset = _dataset_dict[self.data_args['name']](self.data_args)
+        if self.dist and self.dist_mode == 'DDP':
+            self.train_sampler = torch.utils.data.distributed.DistributedSampler(
+                dataset.train_dataset,
+                shuffle=True,
+                drop_last=True,
+                )
+            shuffle = False
+        else:
+            self.train_sampler = None
+            shuffle = True
+        
+        self.train_loader = torch.utils.data.DataLoader(
+            dataset.train_dataset,
+            batch_size=self.data_args.get('train_batchsize', 10),
+            shuffle=shuffle,
+            num_workers=self.data_args.get('num_workers', 0),
+            sampler=self.train_sampler,
+            drop_last=True,
+            pin_memory=True)
+        self.valid_loader = torch.utils.data.DataLoader(
+            dataset.valid_dataset,
+            batch_size=self.data_args.get('eval_batchsize', 10),
+            shuffle=False,
+            num_workers=self.data_args.get('num_workers', 0),
+            pin_memory=True)
+        self.test_loader = torch.utils.data.DataLoader(
+            dataset.test_dataset,
+            batch_size=self.data_args.get('eval_batchsize', 10),
+            shuffle=False,
+            num_workers=self.data_args.get('num_workers', 0),
+            pin_memory=True)
+        
+        self.normalizer = dataset.normalizer
+    
+    def _get_state_dict_cpu(self):
+        if self.dist and self.dist_mode == 'DDP':
+            model_to_save = self.model.module
+        elif isinstance(self.model, torch.nn.DataParallel):
+            model_to_save = self.model.module
+        else:
+            model_to_save = self.model
+        return {k: v.detach().cpu() for k, v in model_to_save.state_dict().items()}
+    
+    def save_ckpt(self, epoch, best=False):
+        if not os.path.exists(self.saving_path):
+            os.makedirs(self.saving_path)
+        state_dict_cpu = self._get_state_dict_cpu()
+        if best:
+            torch.save(state_dict_cpu, os.path.join(self.saving_path, "best_model.pth"))
+        else:
+            torch.save(state_dict_cpu, os.path.join(self.saving_path, f"model_epoch_{epoch}.pth"))
+            if self.ckpt_max is not None and self.ckpt_max > 0:
+                ckpt_list = [f for f in os.listdir(self.saving_path) if f.startswith('model_epoch_') and f.endswith('.pth')]
+                if len(ckpt_list) > self.ckpt_max:
+                    ckpt_list.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
+                    os.remove(os.path.join(self.saving_path, ckpt_list[0]))
+    
+    def load_ckpt(self, ckpt_path):
+        state = torch.load(ckpt_path, map_location="cpu")
+        if self.dist and self.dist_mode == 'DDP':
+            self.model.module.load_state_dict(state)
+        elif isinstance(self.model, torch.nn.DataParallel):
+            self.model.module.load_state_dict(state)
+        else:
+            self.model.load_state_dict(state)
+    
+    def check_main_process(self):
+        if self.dist is False:
+            return True
+        if self.dist_mode == 'DP':
+            return True
+        if self.local_rank == 0:
+            return True
+        return False
+    
+    def main_log(self, msg):
+        if self.check_main_process():
+            self.logger(msg)
+    
+    def process(self, **kwargs):
+        self.main_log("Start training")
         best_epoch = 0
         best_metrics = None
+        best_path = os.path.join(self.saving_path, "best_model.pth")
         counter = 0
-        with tqdm(total=self.epochs) as bar:
-            for epoch in range(self.epochs):
-                train_loss_record = self.train(model, train_loader, optimizer, criterion, scheduler, regularizer=regularizer, **kwargs)
-                if self.verbose:
-                    # tqdm.write("Epoch {} | {} | lr: {:.4f}".format(epoch, train_loss_record, optimizer.param_groups[0]["lr"]))
-                    self.logger("Epoch {} | {} | lr: {:.4f}".format(epoch, train_loss_record, optimizer.param_groups[0]["lr"]))
-                if self.wandb:
-                    wandb.log(train_loss_record.to_dict())
-                
-                if self.saving_checkpoint and (epoch + 1) % self.checkpoint_freq == 0:
-                    torch.save({
-                        'epoch': epoch,
-                        'model_state_dict': model.cpu().state_dict(),
-                        'optimizer_state_dict': optimizer.state_dict(),
-                        'scheduler_state_dict': scheduler.state_dict(),
-                        'train_loss_record': train_loss_record.to_dict(),
-                        }, os.path.join(self.saving_path, "checkpoint_{}.pth".format(epoch)))
-                    model.cuda()
-                    if self.verbose:
-                        # tqdm.write("Epoch {} | save checkpoint in {}".format(epoch, self.saving_path))
-                        self.logger("Epoch {} | save checkpoint in {}".format(epoch, self.saving_path))
-                    
-                if (epoch + 1) % self.eval_freq == 0:
-                    valid_loss_record = self.evaluate(model, valid_loader, criterion, split="valid", **kwargs)
-                    if self.verbose:
-                        # tqdm.write("Epoch {} | {}".format(epoch, valid_loss_record))
-                        self.logger("Epoch {} | {}".format(epoch, valid_loss_record))
-                    valid_metrics = valid_loss_record.to_dict()
-                    
-                    if self.wandb:
-                        wandb.log(valid_loss_record.to_dict())
-                    
-                    if not best_metrics or valid_metrics['valid_loss'] < best_metrics['valid_loss']:
-                        counter = 0
-                        best_epoch = epoch
-                        best_metrics = valid_metrics
-                        torch.save(model.cpu().state_dict(), os.path.join(self.saving_path, "best_model.pth"))
-                        model.cuda()
-                        if self.verbose:
-                            # tqdm.write("Epoch {} | save best models in {}".format(epoch, self.saving_path))
-                            self.logger("Epoch {} | save best models in {}".format(epoch, self.saving_path))
-                    elif self.patience != -1:
-                        counter += 1
-                        if counter >= self.patience:
-                            if self.verbose:
-                                self.logger("Early stop at epoch {}".format(epoch))
-                            break
-                bar.update(1)
+        if dist.is_initialized():
+            dist.barrier()
+        bar = tqdm(total=self.epochs) if self.check_main_process() else None
+        
+        for epoch in range(self.epochs):
+            train_loss_record = self.train(epoch)
+            self.main_log("Epoch {} | {} | lr: {:.4f}".format(epoch, train_loss_record, self.optimizer.param_groups[0]["lr"]))
+            if self.check_main_process() and self.wandb:
+                wandb.log(train_loss_record.to_dict())
+            
+            if self.check_main_process() and self.saving_ckpt and (epoch + 1) % self.ckpt_freq == 0:
+                self.save_ckpt(epoch)
+                self.main_log("Epoch {} | save checkpoint in {}".format(epoch, self.saving_path))
 
-        self.logger("Optimization Finished!")
+            if (epoch + 1) % self.eval_freq == 0:
+                valid_loss_record = self.evaluate(split="valid")
+                self.main_log("Epoch {} | {}".format(epoch, valid_loss_record))
+                valid_metrics = valid_loss_record.to_dict()
+                if self.check_main_process() and self.wandb:
+                    wandb.log(valid_loss_record.to_dict())
+                
+                if not best_metrics or valid_metrics['valid_loss'] < best_metrics['valid_loss']:
+                    counter = 0
+                    best_epoch = epoch
+                    best_metrics = valid_metrics
+                    if self.check_main_process() and self.saving_best:
+                        self.save_ckpt(epoch, best=True)
+                    self.main_log("Epoch {} | save best models in {}".format(epoch, best_path))
+                elif self.patience != -1:
+                    counter += 1
+                    if counter >= self.patience:
+                        self.main_log("Early stop at epoch {}".format(epoch))
+                        if not self.dist:
+                            break
+                        stop_flag = torch.tensor(0, device=self.device)
+                        if self.check_main_process():
+                            if self.patience != -1 and counter >= self.patience:
+                                stop_flag += 1
+                        if self.dist and dist.is_initialized():
+                            dist.broadcast(stop_flag, src=0)
+                        if stop_flag.item() > 0:
+                            break                       
+            if self.check_main_process():
+                bar.update(1)
+        if self.check_main_process():
+            if bar is not None:
+                bar.close()
+        self.main_log("Optimization Finished!")
         
-        # load best model
-        if not best_metrics:
-            torch.save(model.cpu().state_dict(), os.path.join(self.saving_path, "best_model.pth"))
-        else:
-            model.load_state_dict(torch.load(os.path.join(self.saving_path, "best_model.pth")))
-            self.logger("Load best models at epoch {} from {}".format(best_epoch, self.saving_path))        
-        model.cuda()
+        if self.check_main_process() and not best_metrics:
+            self.save_ckpt(self.epochs - 1, best=True)
         
-        valid_loss_record = self.evaluate(model, valid_loader, criterion, split="valid", **kwargs)
-        self.logger("Valid metrics: {}".format(valid_loss_record))
-        test_loss_record = self.evaluate(model, test_loader, criterion, split="test", **kwargs)
-        self.logger("Test metrics: {}".format(test_loss_record))
+        if self.dist and dist.is_initialized():
+            dist.barrier()
         
-        if self.wandb:
+        self.load_ckpt(best_path)
+        self.main_log("Load best models at epoch {} from {}".format(best_epoch, best_path))
+
+        valid_loss_record = self.evaluate(split="valid")
+        self.main_log("Valid metrics: {}".format(valid_loss_record))
+        test_loss_record = self.evaluate(split="test")
+        self.main_log("Test metrics: {}".format(test_loss_record))
+
+        if self.check_main_process() and self.wandb:
             wandb.run.summary["best_epoch"] = best_epoch
             wandb.run.summary.update(test_loss_record.to_dict())
-            
-        return model
+            wandb.finish()
+        
+        if self.dist and dist.is_initialized():
+            dist.barrier()
 
-    def train(self, model, train_loader, optimizer, criterion, scheduler=None, **kwargs):
+    def train(self, epoch, **kwargs):
         loss_record = LossRecord(["train_loss"])
-        model.cuda()
-        model.train()
-        for (x, y) in train_loader:
-            x = x.to('cuda')
-            y = y.to('cuda')
-            # compute loss
-            y_pred = model(x).reshape(y.shape)
-            data_loss = criterion(y_pred, y)
-            loss = data_loss
-            # compute gradient
-            optimizer.zero_grad()
+        if self.train_sampler is not None:
+            self.train_sampler.set_epoch(epoch)
+        self.model.train()
+        for i, (x, y) in enumerate(self.train_loader):
+            x = x.to(self.device, non_blocking=True)
+            y = y.to(self.device, non_blocking=True)
+            y_pred = self.model(x)
+            loss = self.loss_fn(y_pred, y)
+            self.optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
-            # record loss and update progress bar
-            loss_record.update({"train_loss": loss.sum().item()}, n=y_pred.shape[0])
-
-        if scheduler is not None:
-            scheduler.step()
+            self.optimizer.step()
+            loss_record.update({"train_loss": loss.item()}, n=x.size(0))
+        if self.scheduler is not None:
+            self.scheduler.step()
         return loss_record
     
-    def evaluate(self, model, eval_loader, criterion, split="valid", **kwargs):
+    def evaluate(self, split="valid", **kwargs):
+        if split == "valid":
+            eval_loader = self.valid_loader
+        elif split == "test":
+            eval_loader = self.test_loader
+        else:
+            raise ValueError("split must be 'valid' or 'test'")
+        
         loss_record = LossRecord(["{}_loss".format(split)])
-        model.eval()
+        self.model.eval()
         with torch.no_grad():
-            for (x, y) in eval_loader:
-                x = x.to('cuda')
-                y = y.to('cuda')
-                # compute loss
-                y_pred = model(x).reshape(y.shape)
-                
-                y = eval_loader.dataset.y_normalizer.decode(y.view(y.shape[0], -1, y.shape[-1])).view(y_pred.shape)
-                y_pred = eval_loader.dataset.y_normalizer.decode(y_pred.view(y_pred.shape[0], -1, y_pred.shape[-1])).view(y.shape)
-                
-                data_loss = criterion(y_pred, y)
-                loss = data_loss
-                loss_record.update({"{}_loss".format(split): loss.sum().item()}, n=y_pred.shape[0])
+            for x, y in eval_loader:
+                x = x.to(self.device, non_blocking=True)
+                y = y.to(self.device, non_blocking=True)
+                y_pred = self.model(x).reshape(y.shape)
+                y_pred = self.normalizer.decode(y_pred)
+                y = self.normalizer.decode(y)
+                loss = self.loss_fn(y_pred, y)  
+                loss_record.update({"{}_loss".format(split): loss.item()}, n=x.size(0))
+        if self.dist and dist.is_initialized():              
+            loss_record.dist_reduce()
         return loss_record
-

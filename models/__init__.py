@@ -3,7 +3,7 @@ from .unet import UNet2d
 from .ddpm import GaussianDiffusion as DDPM
 
     
-ALL_MODELS = {
+_model_dict = {
     "FNO2d": FNO2d,
     "UNet2d": UNet2d,
     "DDPM": DDPM,
