@@ -4,6 +4,7 @@ import wandb
 import logging
 
 import torch.distributed as dist
+from torch import nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from tqdm import tqdm
@@ -39,6 +40,8 @@ class BaseTrainer:
         self.model_name = self.model_args['name']
         self.main_log("Building {} model".format(self.model_name))
         self.model = self.build_model()
+        self.apply_init()
+        
         if self.train_args.get('load_ckpt', False):
             self.load_ckpt(self.train_args['ckpt_path'])
             self.main_log("Load model from {}".format(self.train_args['ckpt_path']))
@@ -88,6 +91,11 @@ class BaseTrainer:
         self.ckpt_max = self.train_args.get('ckpt_max', 5)
         self.saving_path = self.train_args.get('saving_path', None)
 
+    def _unwrap(self):
+        if isinstance(self.model, (DDP, nn.DataParallel)):
+            return self.model.module
+        return self.model
+    
     def set_distribute(self):
         self.dist = self.train_args.get('distribute', False)
         if self.dist:
@@ -110,6 +118,12 @@ class BaseTrainer:
             init_ = partial(torch.nn.init.kaiming_normal_)
         return init_
 
+    def apply_init(self, **kwargs):
+        initializer = self.get_initializer(self.train_args.get('initializer', None))
+        if initializer is not None:
+            self.model.apply(initializer)
+            self.main_log("Apply {} initializer".format(self.train_args.get('initializer', None)))
+    
     def build_optimizer(self, **kwargs):
         if self.optim_args['optimizer'] == 'Adam':
             optimizer = torch.optim.Adam(

@@ -1,9 +1,5 @@
-import os
-
 import torch
-from tqdm import tqdm
-import wandb
-import logging
+
 from models.ddpm import UNet, GaussianDiffusion
 from utils.loss import LossRecord
 
@@ -12,48 +8,28 @@ from .base import BaseTrainer
 
 class DDPMTrainer(BaseTrainer):
     def __init__(self, args):
+        self.beta_schedule = args['beta_schedule']
         super().__init__(args)
-        self.loss_type = args['loss_type']
-        self.n_iter = args['n_iter']
-        self.step = 0
-        self.beta_schedule = {
-            "train": {
-                "schedule": "linear",
-                "n_timestep": 2000,
-                "linear_start": 1e-4,
-                "linear_end": 2e-2
-            },
-            "val": {
-                "schedule": "linear",
-                "n_timestep": 2000,
-                "linear_start": 1e-4,
-                "linear_end": 2e-2
-            }
-        }
-
-    def build_model(self, args, **kwargs):
+        
+    def build_model(self, **kwargs):
         model = UNet(
-            in_channel=args['in_channel'],
-            out_channel=args['out_channel'],
-            # norm_groups=args['norm_groups'],
-            inner_channel=args['inner_channel'],
-            channel_mults=args['channel_mults'],
-            attn_res=args['attn_res'],
-            res_blocks=args['res_blocks'],
-            dropout=args['dropout'],
-            image_size=args['image_size'],
+            in_channel=self.model_args['in_channel'],
+            out_channel=self.model_args['out_channel'],
+            inner_channel=self.model_args['inner_channel'],
+            channel_mults=self.model_args['channel_mults'],
+            attn_res=self.model_args['attn_res'],
+            res_blocks=self.model_args['res_blocks'],
+            dropout=self.model_args['dropout'],
+            image_size=self.model_args['image_size'],
             )
         diffusion = GaussianDiffusion(
             model,
-            image_size=args['image_size'],
-            channels=args['channels'],
-            loss_type=self.loss_type,
-            conditional=args['conditional'],
-            schedule_opt=self.beta_schedule,
+            image_size=self.model_args['image_size'],
+            channels=self.model_args['channels'],
+            loss_type=self.model_args['loss_type'],
+            conditional=self.model_args['conditional'],
+            schedule_opt=self.beta_schedule['train'],
             )
-        
-        # initializer = self.get_initializer('orthogonal')
-        # diffusion.apply(initializer)
         
         diffusion.set_new_noise_schedule(
             self.beta_schedule['train'],
@@ -62,56 +38,54 @@ class DDPMTrainer(BaseTrainer):
         diffusion.set_loss(self.device)
 
         return diffusion
-    
-    def train(self, model, train_loader, optimizer, criterion, scheduler=None, **kwargs):
+
+    def train(self, epoch, **kwargs):
         loss_record = LossRecord(["train_loss"])
-        model.cuda()
-        model.train()
-        for (x, y) in train_loader:
-            x = x.to('cuda')
-            y = y.to('cuda')
-            # compute loss
-            x = x.permute(0, 3, 1, 2)  # (b, c, h, w)
+        if self.train_sampler is not None:
+            self.train_sampler.set_epoch(epoch)
+        self.model.train()
+        for i, (x, y) in enumerate(self.train_loader):
+            x = x.to(self.device, non_blocking=True)
+            y = y.to(self.device, non_blocking=True)
+            x = x.permute(0, 3, 1, 2)
             y = y.permute(0, 3, 1, 2)
             data = {
                 'SR': x,
                 'HR': y
             }
             B, C, H, W = x.shape
-            pix_loss = model(data)
+            pix_loss = self.model(data)
             loss = pix_loss.sum() / int(B * C * H * W)
-            # compute gradient
-            optimizer.zero_grad()
+            self.optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
-            # record loss and update progress bar
+            self.optimizer.step()
             loss_record.update({"train_loss": loss.item()}, n=B)
-
-        if scheduler is not None:
-            scheduler.step()
+        if self.scheduler is not None:
+            self.scheduler.step()
         return loss_record
-
-    def evaluate(self, model, eval_loader, criterion, split='val', **kwargs):
-        loss_record = LossRecord(["valid_loss", "PSNR", "SSIM"])
-        model.cuda()
-        model.eval()
+    
+    def evaluate(self, split="valid", **kwargs):
+        if split == "valid":
+            eval_loader = self.valid_loader
+        elif split == "test":
+            eval_loader = self.test_loader
+        else:
+            raise ValueError("split must be 'valid' or 'test'")
+        
+        loss_record = LossRecord(["{}_loss".format(split)])
+        self.model.eval()
         with torch.no_grad():
-            for (x, y) in eval_loader:
-                x = x.to('cuda')
-                y = y.to('cuda')
-                # compute loss
-                x = x.permute(0, 3, 1, 2)  # (b, c, h, w)
-                y = y.permute(0, 3, 1, 2)
-                data = {
-                    'SR': x,
-                    'HR': y
-                }
+            for x, y in eval_loader:
+                x = x.to(self.device, non_blocking=True)
+                y = y.to(self.device, non_blocking=True)
+                x = x.permute(0, 3, 1, 2)
                 B, C, H, W = x.shape
-                y_pred = model.super_resolution(x, continous=False)
-                loss = criterion(y_pred, y)
-                psnr = calculate_psnr(y, y_pred)
-                ssim = calculate_ssim(y, y_pred)
-                loss_record.update({"valid_loss": loss.sum().item(), "PSNR": psnr, "SSIM": ssim}, n=B)
-                break
-
+                y_pred = self._unwrap().super_resolution(x, continous=False)
+                y_pred = y_pred.reshape(B, C, -1).permute(0, 2, 1)
+                y_pred = self.normalizer.decode(y_pred)
+                y = self.normalizer.decode(y)
+                loss = self.loss_fn(y_pred, y)
+                loss_record.update({"{}_loss".format(split): loss.item()}, n=x.size(0))
+        if self.dist and dist.is_initialized():              
+            loss_record.dist_reduce()
         return loss_record

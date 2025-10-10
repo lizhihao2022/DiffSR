@@ -21,8 +21,7 @@ def make_beta_schedule(schedule, n_timestep, linear_start=1e-4, linear_end=2e-2,
         betas = np.linspace(linear_start ** 0.5, linear_end ** 0.5,
                             n_timestep, dtype=np.float64) ** 2
     elif schedule == 'linear':
-        betas = np.linspace(linear_start, linear_end,
-                            n_timestep, dtype=np.float64)
+        betas = np.linspace(linear_start, linear_end, n_timestep, dtype=np.float64)
     elif schedule == 'warmup10':
         betas = _warmup_beta(linear_start, linear_end,
                              n_timestep, 0.1)
@@ -107,9 +106,9 @@ class GaussianDiffusion(nn.Module):
         to_torch = partial(torch.tensor, dtype=torch.float32, device=device)
         betas = make_beta_schedule(
             schedule=schedule_opt['schedule'],
-            n_timestep=schedule_opt['n_timestep'],
-            linear_start=schedule_opt['linear_start'],
-            linear_end=schedule_opt['linear_end'])
+            n_timestep=int(schedule_opt['n_timestep']),
+            linear_start=float(schedule_opt['linear_start']),
+            linear_end=float(schedule_opt['linear_end']))
         betas = betas.detach().cpu().numpy() if isinstance(betas, torch.Tensor) else betas
         alphas = 1. - betas
         alphas_cumprod = np.cumprod(alphas, axis=0)
