@@ -1,11 +1,17 @@
 from .fno import FNO2d
 from .unet import UNet2d
-from .ddpm import GaussianDiffusion as DDPM
-from .sr3 import GaussianDiffusion as SR3
+from . import ddpm
+from . import sr3
     
 _model_dict = {
     "FNO2d": FNO2d,
     "UNet2d": UNet2d,
-    "DDPM": DDPM,
-    "SR3": SR3,
+    "DDPM": {
+        "model": ddpm.UNet,
+        "diffusion": ddpm.GaussianDiffusion,
+    },
+    "SR3": {
+        "model": sr3.UNet,
+        "diffusion": sr3.GaussianDiffusion,
+    },
 }

@@ -75,7 +75,7 @@ class BaseForecaster(object):
             shuffle=False,
             num_workers=self.data_args.get('num_workers', 0),
             pin_memory=True)
-
+    
     def forecast(self, loader, normalizer, **kwargs):        
         loss_record = self.evaluator.init_record()
         all_y = []
