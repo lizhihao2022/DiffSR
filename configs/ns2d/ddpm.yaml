@@ -19,9 +19,9 @@ data:
   sample_factor: 2
   train_batchsize: 200
   eval_batchsize: 32
-  train_ratio: 0.8
-  valid_ratio: 0.1
-  test_ratio: 0.1
+  train_ratio: 0.98
+  valid_ratio: 0.01
+  test_ratio: 0.01
   subset: False
   subset_ratio: 0.1
   normalize: True
@@ -32,12 +32,12 @@ train:
   cuda: True
   device: 0
   epochs: 500
-  patience: 10
-  eval_freq: 5
+  patience: 2
+  eval_freq: 50
   saving_best: True
   load_ckpt: False
   saving_ckpt: True
-  ckpt_freq: 5
+  ckpt_freq: 10
   ckpt_max: 5
   distribute: True
   distribute_mode: 'DDP'

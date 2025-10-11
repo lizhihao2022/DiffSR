@@ -388,3 +388,4 @@ class BaseTrainer:
         if self.dist and dist.is_initialized():              
             loss_record.dist_reduce()
         return loss_record
+import torch.distributed as dist

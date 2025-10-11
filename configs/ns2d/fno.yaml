@@ -17,9 +17,9 @@ data:
   sample_factor: 2
   train_batchsize: 128
   eval_batchsize: 128
-  train_ratio: 0.8
-  valid_ratio: 0.1
-  test_ratio: 0.1
+  train_ratio: 0.98
+  valid_ratio: 0.01
+  test_ratio: 0.01
   subset: False
   subset_ratio: 0.1
   normalize: True

@@ -1,4 +1,5 @@
 import torch
+import torch.distributed as dist
 
 from models.ddpm import UNet, GaussianDiffusion
 from utils.loss import LossRecord
