@@ -24,12 +24,13 @@ class BaseForecaster(object):
         
         self.shape = self.data_args['shape']
         
+        torch.manual_seed(self.train_args.get('seed', 42))
+        self.device = self.train_args.get('device', 'cuda')
+        
         self.model_name = self.model_args['name']
         self.model = self.build_model()
         self.load_model()
         self.build_evaluator()
-        torch.manual_seed(self.train_args.get('seed', 42))
-        self.device = self.train_args.get('device', 'cuda')
         self.model.to(self.device)
 
     def build_model(self, **kwargs):
@@ -85,7 +86,7 @@ class BaseForecaster(object):
             for x, y in loader:
                 x = x.to(self.device, non_blocking=True)
                 y = y.to(self.device, non_blocking=True)
-                y_pred = self.model(x).reshape(y.shape)
+                y_pred = self.inference(x, y, **kwargs)
                 y_pred = normalizer.decode(y_pred)
                 y = normalizer.decode(y)
                 all_y.append(y)
@@ -96,14 +97,14 @@ class BaseForecaster(object):
         print(loss_record)
         return loss_record
     
-    def __call__(self, *args, **kwargs):
-        return self.forecast(*args, **kwargs)
+    def inference(self, x, y, **kwargs):
+        return self.model(x).reshape(y.shape)
 
     def vis(self, raw_x, raw_y, normalizer, save_path=None, **kwargs):
         self.model.eval()
         with torch.no_grad():
             raw_x = raw_x.to(self.device)
-            pred_y = self.model(raw_x)
+            pred_y = self.inference(raw_x, raw_y, **kwargs)
         pred_y = normalizer.decode(pred_y)
         raw_y = normalizer.decode(raw_y)
         raw_x = make_lr_blur(raw_y.permute(0, 3, 1, 2), scale=self.data_args.get('sample_factor', 2)).permute(0, 2, 3, 1)

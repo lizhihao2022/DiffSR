@@ -371,7 +371,7 @@ class BaseTrainer:
             self.scheduler.step()
         return loss_record
     
-    def forecast(self, x, y, **kwargs):
+    def inference(self, x, y, **kwargs):
         return self.model(x).reshape(y.shape)
     
     def evaluate(self, split="valid", **kwargs):
@@ -390,7 +390,7 @@ class BaseTrainer:
             for x, y in eval_loader:
                 x = x.to(self.device, non_blocking=True)
                 y = y.to(self.device, non_blocking=True)
-                y_pred = self.forecast(x, y, **kwargs)
+                y_pred = self.inference(x, y, **kwargs)
                 y_pred = self.normalizer.decode(y_pred)
                 y = self.normalizer.decode(y)
                 all_y.append(y)

@@ -15,3 +15,14 @@ _model_dict = {
         "diffusion": sr3.GaussianDiffusion,
     },
 }
+
+_ddpm_dict = {
+    "DDPM": {
+        "model": ddpm.UNet,
+        "diffusion": ddpm.GaussianDiffusion,
+    },
+    "SR3": {
+        "model": sr3.UNet,
+        "diffusion": sr3.GaussianDiffusion,
+    },
+}

@@ -159,21 +159,20 @@ class ResnetBlocWithAttn(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(
-        self,
-        in_channel=6,
-        out_channel=3,
-        inner_channel=32,
-        norm_groups=32,
-        channel_mults=(1, 2, 4, 8, 8),
-        attn_res=(8),
-        res_blocks=3,
-        dropout=0,
-        with_noise_level_emb=True,
-        image_size=128
-    ):
+    def __init__(self, model_args, **kwargs):
         super().__init__()
 
+        in_channel = model_args.get('in_channel', 6)
+        out_channel = model_args.get('out_channel', 3)
+        inner_channel = model_args.get('inner_channel', 32)
+        norm_groups = model_args.get('norm_groups', 32)
+        channel_mults = model_args.get('channel_mults', (1, 2, 4, 8, 8))
+        attn_res = model_args.get('attn_res', (8))
+        res_blocks = model_args.get('res_blocks', 3)
+        dropout = model_args.get('dropout', 0)
+        with_noise_level_emb = model_args.get('with_noise_level_emb', True)
+        image_size = model_args.get('image_size', 128)
+        
         if with_noise_level_emb:
             noise_level_channel = inner_channel
             self.noise_level_mlp = nn.Sequential(

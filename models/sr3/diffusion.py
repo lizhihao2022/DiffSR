@@ -66,13 +66,15 @@ class GaussianDiffusion(nn.Module):
     def __init__(
         self,
         denoise_fn,
-        image_size,
-        channels=3,
-        loss_type='l1',
-        conditional=True,
+        model_args,
         schedule_opt=None
     ):
         super().__init__()
+        
+        image_size = model_args['image_size']
+        channels = model_args.get('channels', 3)
+        loss_type = model_args.get('loss_type', 'l1')
+        conditional = model_args.get('conditional', True)
         self.channels = channels
         self.image_size = image_size
         self.denoise_fn = denoise_fn

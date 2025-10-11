@@ -78,13 +78,15 @@ class GaussianDiffusion(nn.Module):
     def __init__(
         self,
         denoise_fn,
-        image_size,
-        channels=3,
-        loss_type='l1',
-        conditional=True,
-        schedule_opt=None
+        model_args,
+        schedule_opt=None,
     ):
         super().__init__()
+        image_size = model_args['image_size']
+        channels = model_args.get('channels', 3)
+        loss_type = model_args.get('loss_type', 'l1')
+        conditional = model_args.get('conditional', True)
+        
         self.channels = channels
         self.image_size = image_size
         self.denoise_fn = denoise_fn
@@ -92,7 +94,6 @@ class GaussianDiffusion(nn.Module):
         self.loss_type = loss_type
         if schedule_opt is not None:
             pass
-            # self.set_new_noise_schedule(schedule_opt)
 
     def set_loss(self, device):
         if self.loss_type == 'l1':
@@ -211,7 +212,6 @@ class GaussianDiffusion(nn.Module):
                     (b,), i, device=device, dtype=torch.long))
                 if i % sample_inter == 0:
                     ret_img = torch.cat([ret_img, img], dim=0)
-            return img
         else:
             x = x_in
             shape = x.shape
@@ -226,7 +226,7 @@ class GaussianDiffusion(nn.Module):
         if continous:
             return ret_img
         else:
-            return img[-1]
+            return img
 
     @torch.no_grad()
     def sample(self, batch_size=1, continous=False):
