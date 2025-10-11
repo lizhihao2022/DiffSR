@@ -60,33 +60,13 @@ class DDPMTrainer(BaseTrainer):
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-            loss_record.update({"train_loss": loss.item()}, n=B)
+            loss_record.update({"train_loss": loss.item()}, n=1)
         if self.scheduler is not None:
             self.scheduler.step()
         return loss_record
     
-    def evaluate(self, split="valid", **kwargs):
-        if split == "valid":
-            eval_loader = self.valid_loader
-        elif split == "test":
-            eval_loader = self.test_loader
-        else:
-            raise ValueError("split must be 'valid' or 'test'")
-        
-        loss_record = LossRecord(["{}_loss".format(split)])
-        self.model.eval()
-        with torch.no_grad():
-            for x, y in eval_loader:
-                x = x.to(self.device, non_blocking=True)
-                y = y.to(self.device, non_blocking=True)
-                x = x.permute(0, 3, 1, 2)
-                B, C, H, W = x.shape
-                y_pred = self._unwrap().super_resolution(x, continous=False)
-                y_pred = y_pred.reshape(B, C, -1).permute(0, 2, 1)
-                y_pred = self.normalizer.decode(y_pred)
-                y = self.normalizer.decode(y)
-                loss = self.loss_fn(y_pred, y)
-                loss_record.update({"{}_loss".format(split): loss.item()}, n=x.size(0))
-        if self.dist and dist.is_initialized():              
-            loss_record.dist_reduce()
-        return loss_record
+    def forecast(self, x, y, **kwargs):
+        x = x.permute(0, 3, 1, 2)
+        y_pred = self._unwrap().super_resolution(x, continous=False)
+        y_pred = y_pred.permute(0, 2, 3, 1).reshape(y.shape)
+        return y_pred

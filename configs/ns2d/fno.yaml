@@ -55,6 +55,6 @@ schedule:
 log:
   verbose: True
   log: True
-  log_dir: './logs'
+  log_dir: '/ai/gno/CODE/DiffSR/logs/'
   wandb: False
   wandb_project: ''
