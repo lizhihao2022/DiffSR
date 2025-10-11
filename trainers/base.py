@@ -11,6 +11,7 @@ from tqdm import tqdm
 from utils.loss import LossRecord, CompositeLoss, LpLoss
 from utils.helper import save_code
 from utils.ddp import debug_barrier
+from utils.metrics import Evaluator
 from functools import partial
 from models import _model_dict
 from datasets import _dataset_dict
@@ -68,6 +69,7 @@ class BaseTrainer:
         self.optimizer = self.build_optimizer()
         self.scheduler = self.build_scheduler()
         self.loss_fn = self.build_loss()
+        self.evaluator = self.build_evaluator()
 
         self.main_log("Model: {}".format(self.model))
         self.main_log("Model parameters: {:.2f}M".format(sum(p.numel() for p in self.model.parameters()) / 1e6))
@@ -187,6 +189,9 @@ class BaseTrainer:
     def build_loss(self, **kwargs):
         loss_fn = LpLoss()
         return loss_fn
+    
+    def build_evaluator(self):
+        return Evaluator(shape=self.data_args['shape'])
     
     def build_data(self, **kwargs):
         if self.data_args['name'] not in _dataset_dict:
@@ -361,7 +366,7 @@ class BaseTrainer:
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-            loss_record.update({"train_loss": loss.item()}, n=x.size(0))
+            loss_record.update({"train_loss": loss.item()})
         if self.scheduler is not None:
             self.scheduler.step()
         return loss_record
@@ -374,7 +379,9 @@ class BaseTrainer:
         else:
             raise ValueError("split must be 'valid' or 'test'")
         
-        loss_record = LossRecord(["{}_loss".format(split)])
+        loss_record = self.evaluator.init_record(["{}_loss".format(split)])
+        all_y = []
+        all_y_pred = []
         self.model.eval()
         with torch.no_grad():
             for x, y in eval_loader:
@@ -383,9 +390,13 @@ class BaseTrainer:
                 y_pred = self.model(x).reshape(y.shape)
                 y_pred = self.normalizer.decode(y_pred)
                 y = self.normalizer.decode(y)
-                loss = self.loss_fn(y_pred, y)  
-                loss_record.update({"{}_loss".format(split): loss.item()}, n=x.size(0))
-        if self.dist and dist.is_initialized():              
+                all_y.append(y)
+                all_y_pred.append(y_pred)
+        y = torch.cat(all_y, dim=0)
+        y_pred = torch.cat(all_y_pred, dim=0)
+        loss = self.loss_fn(y_pred, y)
+        loss_record.update({"{}_loss".format(split): loss.item()})
+        self.evaluator(y_pred, y, record=loss_record)
+        if self.dist and dist.is_initialized():
             loss_record.dist_reduce()
         return loss_record
-import torch.distributed as dist

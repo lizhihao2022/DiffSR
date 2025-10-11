@@ -111,7 +111,7 @@ class LossRecord:
         self.loss_list = loss_list
         self.loss_dict = {loss: AverageRecord() for loss in self.loss_list}
     
-    def update(self, update_dict, n):
+    def update(self, update_dict, n=1):
         for key, value in update_dict.items():
             self.loss_dict[key].update(value, n)
     

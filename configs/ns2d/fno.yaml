@@ -15,8 +15,9 @@ data:
   name: 'NavierStokes2D'
   data_path: "/ai/gno/DATA/ns/ns_V1e-5_N1200_T20.mat"
   sample_factor: 2
-  train_batchsize: 128
-  eval_batchsize: 128
+  shape: [64, 64]
+  train_batchsize: 512
+  eval_batchsize: 512
   train_ratio: 0.98
   valid_ratio: 0.01
   test_ratio: 0.01
@@ -37,7 +38,7 @@ train:
   saving_ckpt: True
   ckpt_freq: 5
   ckpt_max: 5
-  distribute: True
+  distribute: False
   distribute_mode: 'DDP'
   device_ids: [0, 1, 2, 3]
 
