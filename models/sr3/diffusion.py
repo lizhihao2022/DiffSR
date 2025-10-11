@@ -17,6 +17,7 @@ def _warmup_beta(linear_start, linear_end, n_timestep, warmup_frac):
 
 
 def make_beta_schedule(schedule, n_timestep, linear_start=1e-4, linear_end=2e-2, cosine_s=8e-3):
+    
     if schedule == 'quad':
         betas = np.linspace(linear_start ** 0.5, linear_end ** 0.5,
                             n_timestep, dtype=np.float64) ** 2
@@ -94,9 +95,9 @@ class GaussianDiffusion(nn.Module):
 
         betas = make_beta_schedule(
             schedule=schedule_opt['schedule'],
-            n_timestep=schedule_opt['n_timestep'],
-            linear_start=schedule_opt['linear_start'],
-            linear_end=schedule_opt['linear_end'])
+            n_timestep=int(schedule_opt['n_timestep']),
+            linear_start=float(schedule_opt['linear_start']),
+            linear_end=float(schedule_opt['linear_end']))
         betas = betas.detach().cpu().numpy() if isinstance(
             betas, torch.Tensor) else betas
         alphas = 1. - betas
@@ -207,6 +208,7 @@ class GaussianDiffusion(nn.Module):
 
     @torch.no_grad()
     def super_resolution(self, x_in, continous=False):
+        x_in = F.interpolate(x_in, size=(self.image_size, self.image_size), mode='bilinear', align_corners=None)
         return self.p_sample_loop(x_in, continous)
 
     def q_sample(self, x_start, continuous_sqrt_alpha_cumprod, noise=None):
@@ -239,8 +241,9 @@ class GaussianDiffusion(nn.Module):
         if not self.conditional:
             x_recon = self.denoise_fn(x_noisy, continuous_sqrt_alpha_cumprod)
         else:
+            x_sr = F.interpolate(x_in['SR'], size=(h, w), mode='bilinear', align_corners=None)
             x_recon = self.denoise_fn(
-                torch.cat([x_in['SR'], x_noisy], dim=1), continuous_sqrt_alpha_cumprod)
+                torch.cat([x_sr, x_noisy], dim=1), continuous_sqrt_alpha_cumprod)
 
         loss = self.loss_func(noise, x_recon)
         return loss

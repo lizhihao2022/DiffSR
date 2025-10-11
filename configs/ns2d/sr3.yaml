@@ -1,0 +1,74 @@
+model:
+  name: 'SR3'
+  in_channel: 2
+  out_channel: 1
+  inner_channel: 64
+  channel_mults: [1,2,4,8,8]
+  attn_res: [16]
+  res_blocks: 2
+  dropout: 0.2
+  image_size: 64
+  channels: 1
+  conditional: True
+  n_iter: 10000
+  loss_type: 'l1'
+
+data:
+  name: 'NavierStokes2D'
+  data_path: "/ai/gno/DATA/ns/ns_V1e-5_N1200_T20.mat"
+  sample_factor: 2
+  shape: [64, 64]
+  train_batchsize: 160
+  eval_batchsize: 32
+  train_ratio: 0.98
+  valid_ratio: 0.01
+  test_ratio: 0.01
+  subset: False
+  subset_ratio: 0.1
+  normalize: True
+  normalizer_type: 'PGN'
+
+train:
+  random_seed: 42
+  cuda: True
+  device: 0
+  epochs: 500
+  patience: 2
+  eval_freq: 50
+  saving_best: True
+  load_ckpt: False
+  saving_ckpt: True
+  ckpt_freq: 10
+  ckpt_max: 3
+  distribute: True
+  distribute_mode: 'DDP'
+  device_ids: [0, 1, 2, 3]
+
+optimize:
+  optimizer: 'AdamW'
+  lr: 0.0001
+  weight_decay: 0.001
+
+schedule:
+  scheduler: 'StepLR'
+  step_size: 300
+  gamma: 0.5
+
+log:
+  verbose: True
+  log: True
+  log_dir: './logs'
+  wandb: False
+  wandb_project: ''
+
+beta_schedule:
+  train:
+    schedule: 'linear'
+    n_timestep: 2000
+    linear_start: 1e-6
+    linear_end: 2e-2
+  val:
+    schedule: 'linear'
+    n_timestep: 2000
+    linear_start: 1e-6
+    linear_end: 2e-2
