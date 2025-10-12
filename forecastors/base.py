@@ -100,7 +100,8 @@ class BaseForecaster(object):
     def inference(self, x, y, **kwargs):
         return self.model(x).reshape(y.shape)
 
-    def vis_ns(self, raw_x, raw_y, normalizer, save_path=None, max_error=0.5, **kwargs):
+    def vis_ns(self, raw_x, raw_y, normalizer, save_path=None, 
+               max_error=0.5, dpi=100, **kwargs):
         self.model.eval()
         with torch.no_grad():
             raw_x = raw_x.to(self.device)
@@ -119,7 +120,7 @@ class BaseForecaster(object):
         vmin = raw_y.min()
         vmax = raw_y.max()
 
-        fig, axs = plt.subplots(1, 4, figsize=(18, 4), constrained_layout=True)
+        fig, axs = plt.subplots(1, 4, figsize=(18, 4), constrained_layout=True, dpi=dpi)
 
         axs[0].imshow(raw_x, cmap='viridis', vmin=vmin, vmax=vmax)
         axs[0].set_title('Input LR')
