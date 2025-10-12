@@ -100,7 +100,7 @@ class BaseForecaster(object):
     def inference(self, x, y, **kwargs):
         return self.model(x).reshape(y.shape)
 
-    def vis(self, raw_x, raw_y, normalizer, save_path=None, **kwargs):
+    def vis_ns(self, raw_x, raw_y, normalizer, save_path=None, max_error=0.5, **kwargs):
         self.model.eval()
         with torch.no_grad():
             raw_x = raw_x.to(self.device)
@@ -133,7 +133,7 @@ class BaseForecaster(object):
         axs[2].set_title('{} Prediction HR'.format(self.model_name))
         axs[2].axis('off')
 
-        errormap = axs[3].imshow(error_y, cmap='hot')
+        errormap = axs[3].imshow(error_y, cmap='hot', vmin=0, vmax=max_error)
         axs[3].set_title('Absolute Error')
         axs[3].axis('off')
 
