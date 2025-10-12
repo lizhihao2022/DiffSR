@@ -1,4 +1,4 @@
-# GPO
+# DiffSR
 
 ## Requirements
 To install requirements:
@@ -7,7 +7,7 @@ To install requirements:
 pip install -r requirements.txt
 ```
 
-## Datastes
+## Datasets
 
 The datasets include:
 
@@ -20,10 +20,16 @@ The datasets include:
 
 1. Add dataset path in the config file in the `configs` folder.
 
-2. Run the following command to train the model:
+2. Run the following command to train the model in single GPU or DP mode:
 
 ```train
 python main.py --config configs/ns2d/fno.yaml
+```
+
+3. Run the following command to train the model in DDP mode:
+
+```train
+torchrun --nproc_per_node=4 main_ddp.py --config /ai/gno/CODE/DiffSR/configs/ns2d/unet.yaml
 ```
 
 
@@ -33,69 +39,8 @@ The codebase is organized as follows:
 
 - `datasets/`: contains the dataset classes.
 - `models/`: contains the model classes.
-- `trainers/`: contrains the model builder classes.
-- `procedures/`: contains the dataset procedure methods.
+- `trainers/`: contains the model trainer classes.
+- `forecastors/`: contains the forecastor base class.
 - `configs/`: contains the configuration files.
 - `utils/`: contains the utility functions.
-- `main.py`: the main file to run the code.
-
-### Model
-
-Write your model in `models` folder and register it in `models/__init__.py` file. 
-
-```python
-from .your_model import YourModel
-
-ALL_MODELS = {
-    ...
-    'your_model': YourModel,
-}
-```
-
-### Dataset
-
-Write your dataset in directory `datasets/` and register your dataset in `datasets/__init__.py` as follows:
-
-```python
-from .your_dataset import YourDataset
-```
-
-### Trainer
-
-Write your model builder in `trainers/` and register it in `trainers/__init__.py` as follows:
-
-```python
-from .your_model import YourModelTrainer
-
-TRAINER_DICT = {
-    ...
-    'your_model': YourModelTrainer,
-}
-```
-
-We provide a default trainers in `trainers/base.py` which can be used for training the model.
-
-### Procedure
-
-Write your dataset procedure in `procedures/` and register it in `procedures/__init__.py` as follows:
-
-```python
-from .your_dataset import YourDatasetProcedure
-```
-
-Add your dataset procedure in the `main.py` file.
-
-```python
-...
-elif args.dataset == 'your_dataset':
-    procedure = YourDatasetProcedure
-...
-```
-
-### Config
-Write your config in directory `configs/` and run the following command to train the model:
-
-```train
-python main.py --config configs/your_config.yaml
-```
-
+- `main.py`/`main_ddp.py`: the main file to run the code.
