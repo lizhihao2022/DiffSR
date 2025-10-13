@@ -43,11 +43,12 @@ class DDPMTrainer(BaseTrainer):
             }
             B, C, H, W = x.shape
             pix_loss = self.model(data)
-            loss = pix_loss.sum() / int(B * C * H * W)
+            loss = pix_loss / (B * C * H * W)  # normalize loss
+            loss_record.update({"train_loss": pix_loss}, n=B)
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-            loss_record.update({"train_loss": loss.item()}, n=1)
+            
         if self.scheduler is not None:
             self.scheduler.step()
         return loss_record

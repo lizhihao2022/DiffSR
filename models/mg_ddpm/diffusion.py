@@ -101,6 +101,7 @@ class GaussianDiffusion(nn.Module):
             self.loss_func = nn.L1Loss(reduction='sum').to(device)
         elif self.loss_type == 'l2':
             self.loss_func = nn.MSELoss(reduction='sum').to(device)
+            # self.loss_func = LpLoss(p=2, d=2, reduction=True, size_average=False)
         else:
             raise NotImplementedError()
         # self.loss_func = LpLoss(p=2, d=2, size_average=False)
@@ -195,8 +196,7 @@ class GaussianDiffusion(nn.Module):
             x=x, t=t, clip_denoised=clip_denoised, condition_x=condition_x)
         noise = noise_like(x.shape, device, repeat_noise)
         # no noise when t == 0
-        nonzero_mask = (1 - (t == 0).float()).reshape(b,
-                                                      *((1,) * (len(x.shape) - 1)))
+        nonzero_mask = (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1)))
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
 
     @torch.no_grad()
@@ -225,6 +225,7 @@ class GaussianDiffusion(nn.Module):
                     (b,), i, device=device, dtype=torch.long), condition_x=x)
                 if i % sample_inter == 0:
                     ret_img = torch.cat([ret_img, img], dim=0)
+                    
         if continous:
             return ret_img
         else:
