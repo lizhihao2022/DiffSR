@@ -1,20 +1,13 @@
 model:
-  name: 'FNO2d'
-  modes1: [15, 12, 9, 9, 9]
-  modes2: [15, 12, 9, 9, 9]
-  width: 64
-  fc_dim: 128
-  layers: [16, 24, 24, 32, 32]
-  in_dim: 1
-  out_dim: 1
-  act: 'gelu'
-  pos_dim: 2
-  upsample_factor: [2, 2]
+  name: 'UNet2d'
+  in_channels: 1
+  out_channels: 1
+  init_features: 64
 
 data:
   name: 'NavierStokes2D'
-  data_path: "/home/yc/CVPR_26_fluid_SR/DiffSR-main/NavierStokes_V1e-5_N1200_T20.mat"
-  sample_factor: 2
+  data_path: "/ai/gno/DATA/ns/ns_V1e-5_N1200_T20.mat"
+  sample_factor: 4
   shape: [64, 64]
   train_batchsize: 512
   eval_batchsize: 512
@@ -25,6 +18,7 @@ data:
   subset_ratio: 0.1
   normalize: True
   normalizer_type: 'PGN'
+  num_workers: 2
 
 train:
   random_seed: 42
@@ -32,12 +26,12 @@ train:
   device: 0
   epochs: 500
   patience: 10
-  eval_freq: 5
+  eval_freq: 10
   saving_best: True
   load_ckpt: False
   saving_ckpt: True
-  ckpt_freq: 5
-  ckpt_max: 5
+  ckpt_freq: 50
+  ckpt_max: 3
   distribute: False
   distribute_mode: 'DDP'
   device_ids: [0, 1, 2, 3]
@@ -49,12 +43,12 @@ optimize:
 
 schedule:
   scheduler: 'StepLR'
-  step_size: 300
+  step_size: 200
   gamma: 0.5
 
 log:
   verbose: True
   log: True
-  log_dir: '/home/yc/CVPR_26_fluid_SR/DiffSR-main/logs/'
-  wandb: True
-  wandb_project: 'DiffSR-FNO2d'
+  log_dir: './logs'
+  wandb: False
+  wandb_project: ''

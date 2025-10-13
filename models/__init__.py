@@ -1,14 +1,16 @@
 from .fno import FNO2d
 from .unet import UNet2d
 from .m2no import M2NO2d
-
-from . import ddpm
-from . import sr3
 from .galerkin import Galerkin_Transformer
 from .MWT import MWT_SuperResolution
 from .sronet import SRNO
 from .swin_Transformer import SwinSR
-    
+
+from . import ddpm
+from . import sr3
+from . import mg_ddpm
+
+
 _model_dict = {
     "FNO2d": FNO2d,
     "UNet2d": UNet2d,

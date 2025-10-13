@@ -121,7 +121,6 @@ class SpectralUpsampleConv2d(nn.Module):
         # self.weights = nn.Parameter(
         #     self.scale * torch.rand(in_channels, out_channels, 101, 129, dtype=torch.cfloat))
         
-        
     def forward(self, x):
         batchsize = x.shape[0]
         size1 = x.shape[-2]

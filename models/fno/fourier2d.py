@@ -63,7 +63,9 @@ class FNO2d(nn.Module):
                                  for in_size, out_size in zip(self.layers, self.layers[1:])])
         
         self.up_sp_conv = SpectralUpsampleConv2d(self.layers[0], self.layers[0], self.modes1[-1], self.modes2[-1], upsample_factor=self.upsample_factor)
-        self.up_ws = nn.ConvTranspose2d(self.layers[0], self.layers[0], kernel_size=3, stride=self.upsample_factor[0], padding=1, output_padding=1)
+        self.up_ws = nn.ModuleList([nn.ConvTranspose2d(self.layers[0], self.layers[0], kernel_size=3, stride=2, padding=1, output_padding=1) for _ in range(self.upsample_factor[0]//2)])
+        self.up_ws = nn.Sequential(*self.up_ws)
+        # self.up_ws = nn.ConvTranspose2d(self.layers[0], self.layers[0], kernel_size=3, stride=self.upsample_factor[0], padding=1, output_padding=1)
 
         self.fc1 = nn.Linear(layers[-1], fc_dim)
         self.fc2 = nn.Linear(fc_dim, layers[-1])

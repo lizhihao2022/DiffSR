@@ -1,7 +1,7 @@
 logs/
 __pycache__/
-# configs/
-# *.ipynb
+configs/
+notebook/
 *.pyc
 /wandb/
 /logs/
