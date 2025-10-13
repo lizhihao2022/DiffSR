@@ -1,5 +1,5 @@
 model:
-  name: 'DDPM'
+  name: 'MG-DDPM'
   in_channel: 2
   out_channel: 1
   inner_channel: 64
@@ -12,6 +12,18 @@ model:
   conditional: True
   n_iter: 10000
   loss_type: 'l1'
+  num_layer: 5
+  in_channels: 2
+  out_channels: 1
+  k: 8
+  c: 2
+  grid_levels: [1, 1, 2, 2, 2, 3]
+  padding_mode: 'circular'
+  bias: True
+  base: 'legendre'
+  norm: True
+  activation: 'gelu'
+  resolutions: [64, 64]
 
 data:
   name: 'NavierStokes2D'
@@ -19,7 +31,7 @@ data:
   sample_factor: 2
   shape: [64, 64]
   train_batchsize: 200
-  eval_batchsize: 32
+  eval_batchsize: 50
   train_ratio: 0.98
   valid_ratio: 0.01
   test_ratio: 0.01

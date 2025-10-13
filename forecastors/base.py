@@ -34,7 +34,7 @@ class BaseForecaster(object):
         self.model.to(self.device)
 
     def build_model(self, **kwargs):
-        if self.model_name not in _model_dict:
+        if self.model_name not in _model_dict.keys():
             raise NotImplementedError("Model {} not implemented".format(self.model_name))
         print("Building model: {}".format(self.model_name))
         model = _model_dict[self.model_name](self.model_args)

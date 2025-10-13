@@ -34,7 +34,7 @@ train:
   device: 0
   epochs: 500
   patience: 2
-  eval_freq: 1
+  eval_freq: 50
   saving_best: True
   load_ckpt: False
   saving_ckpt: True

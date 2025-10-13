@@ -187,7 +187,7 @@ class BaseTrainer:
         return model
     
     def build_loss(self, **kwargs):
-        loss_fn = LpLoss()
+        loss_fn = LpLoss(size_average=False)
         return loss_fn
     
     def build_evaluator(self):
@@ -363,10 +363,12 @@ class BaseTrainer:
             y = y.to(self.device, non_blocking=True)
             y_pred = self.model(x)
             loss = self.loss_fn(y_pred, y)
+            loss_record.update({"train_loss": loss.sum().item()}, n=x.size(0))
+            loss = loss.mean()
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-            loss_record.update({"train_loss": loss.item()})
+            
         if self.scheduler is not None:
             self.scheduler.step()
         return loss_record
