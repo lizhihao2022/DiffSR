@@ -13,7 +13,7 @@ model:
 
 data:
   name: 'NavierStokes2D'
-  data_path: "/ai/gno/DATA/ns/ns_V1e-5_N1200_T20.mat"
+  data_path: "/home/yc/CVPR_26_fluid_SR/DiffSR-main/NavierStokes_V1e-5_N1200_T20.mat"
   sample_factor: 2
   shape: [64, 64]
   train_batchsize: 512
@@ -55,6 +55,6 @@ schedule:
 log:
   verbose: True
   log: True
-  log_dir: '/ai/gno/CODE/DiffSR/logs/'
-  wandb: False
-  wandb_project: ''
+  log_dir: '/home/yc/CVPR_26_fluid_SR/DiffSR-main/logs/'
+  wandb: True
+  wandb_project: 'DiffSR-FNO2d'

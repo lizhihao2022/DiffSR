@@ -1,0 +1,65 @@
+model:
+  name: 'Swin_Transformer'
+  in_channels: 1
+  out_channels: 1
+  n_hidden: 96
+  n_layers: 3
+  depth: 2
+  num_heads: 4
+  window_size: 4
+  mlp_ratio: 4.
+  qkv_bias: True
+  qk_scale: ~
+  drop_rate: 0.
+  attn_drop_rate: 0.
+  drop_path_rate: 0.1
+  act: 'gelu'
+  upsample_factor: [2, 2]
+
+data:
+  name: 'NavierStokes2D'
+  data_path: "/home/yc/CVPR_26_fluid_SR/DiffSR-main/NavierStokes_V1e-5_N1200_T20.mat"
+  sample_factor: 2
+  shape: [64, 64]
+  train_batchsize: 64
+  eval_batchsize: 64
+  train_ratio: 0.98
+  valid_ratio: 0.01
+  test_ratio: 0.01
+  subset: False
+  subset_ratio: 0.1
+  normalize: True
+  normalizer_type: 'PGN'
+
+train:
+  random_seed: 42
+  cuda: True
+  device: 0
+  epochs: 500
+  patience: 10
+  eval_freq: 5
+  saving_best: True
+  load_ckpt: False
+  saving_ckpt: True
+  ckpt_freq: 5
+  ckpt_max: 5
+  distribute: False
+  distribute_mode: 'DDP'
+  device_ids: [0, 1, 2, 3]
+
+optimize:
+  optimizer: 'AdamW'
+  lr: 0.001
+  weight_decay: 0.001
+
+schedule:
+  scheduler: 'StepLR'
+  step_size: 300
+  gamma: 0.5
+
+log:
+  verbose: True
+  log: True
+  log_dir: '/home/yc/CVPR_26_fluid_SR/DiffSR-main/logs/'
+  wandb: True
+  wandb_project: 'DiffSR-Swin2d'

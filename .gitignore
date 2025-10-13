@@ -3,3 +3,7 @@ __pycache__/
 # configs/
 # *.ipynb
 *.pyc
+/wandb/
+/logs/
+/NavierStokes_V1e-5_N1200_T20.mat
+/NavierStokes_V1e-5_N1200_T202_sr.pt

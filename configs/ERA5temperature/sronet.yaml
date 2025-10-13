@@ -1,0 +1,66 @@
+model:
+  name: 'SRNO'
+  input_channels: 1
+  output_channels: 1
+  use_coord_input: True
+  width: 256
+  blocks: 16
+  upsample_factor: [2, 2]
+
+  encoder_config:
+    n_resblocks: 16
+    n_feats: 64
+    res_scale: 1.0
+    scale: 2
+    no_upsampling: True
+    input_channels: 1
+    output_channels: 64
+
+
+data:
+  name: 'ERA5temperature'
+  data_path: "/home/yc/ERA5/temperature.npy"
+  sample_factor: 2
+  shape: [512, 512]
+  train_batchsize: 16
+  eval_batchsize: 16
+  train_ratio: 0.98
+  valid_ratio: 0.01
+  test_ratio: 0.01
+  subset: False
+  subset_ratio: 0.1
+  normalize: True
+  normalizer_type: 'PGN'
+
+train:
+  random_seed: 42
+  cuda: True
+  device: 0
+  epochs: 500
+  patience: 10
+  eval_freq: 5
+  saving_best: True
+  load_ckpt: False
+  saving_ckpt: True
+  ckpt_freq: 5
+  ckpt_max: 5
+  distribute: True
+  distribute_mode: 'DDP'
+  device_ids: [0, 1, 2, 3]
+
+optimize:
+  optimizer: 'AdamW'
+  lr: 0.001
+  weight_decay: 0.001
+
+schedule:
+  scheduler: 'StepLR'
+  step_size: 300
+  gamma: 0.5
+
+log:
+  verbose: True
+  log: True
+  log_dir: '/home/yc/CVPR_26_fluid_SR/DiffSR-main/logs/ERA5temperature'
+  wandb: True
+  wandb_project: 'DiffSR-SRNO2d-ERA5temperature'
