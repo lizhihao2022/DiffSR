@@ -251,7 +251,7 @@ class BaseTrainer:
             'epoch': epoch,
             'model_state_dict': state_dict_cpu,
             'optimizer_state_dict': self.optimizer.state_dict(),
-            'scheduler_state_dict': self.lr_scheduler.state_dict(),
+            'scheduler_state_dict': self.scheduler.state_dict(),
         }, os.path.join(self.saving_path, f"model_epoch_{epoch}.pth"))
         if self.ckpt_max is not None and self.ckpt_max > 0:
             ckpt_list = [f for f in os.listdir(self.saving_path) if f.startswith('model_epoch_') and f.endswith('.pth')]
