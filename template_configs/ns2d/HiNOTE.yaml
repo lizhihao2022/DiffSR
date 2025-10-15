@@ -1,24 +1,28 @@
 model:
-  name: 'FNO2d'
-  modes1: [15, 12, 9, 9, 9]
-  modes2: [15, 12, 9, 9, 9]
-  width: 64
-  fc_dim: 128
-  layers: [16, 24, 24, 32, 32]
-  in_dim: 1
-  out_dim: 1
-  act: 'gelu'
-  pos_dim: 2
-  upsample_factor: [4, 4]
+  name: 'HiNOTE'
+  in_channels: 1
+  out_channels: 1
+  feature_up_ratio: 4
+  fourier_up: Corner # Options: "Corner", "Area", "Periodic"
+  feature_combine: add  # Options: "add", "cat"
+  non_act: GELU  # Options: "ReLU", "LeakyReLU", "ELU", "SELU", "GELU", "RReLU"
+  liif_up_method: nearest # Options: "nearest", "bilinear"
+  attention_width: 256
+  attention_head: 16
+  hierarchical_levels: 1
+  scale_factor: 4
 
 data:
   name: 'NavierStokes2D'
   data_path: "/home/yc/CVPR26/DiffSR/NavierStokes_V1e-5_N1200_T20.mat"
   sample_factor: 4
   shape: [64, 64]
-  train_batchsize: 512
-  eval_batchsize: 512
-  train_ratio: 0.98
+  train_batchsize: 8
+  eval_batchsize: 8
+  # train_ratio: 0.98
+  # valid_ratio: 0.01
+  # test_ratio: 0.01
+  train_ratio: 0.2
   valid_ratio: 0.01
   test_ratio: 0.01
   subset: False
@@ -55,6 +59,6 @@ schedule:
 log:
   verbose: True
   log: True
-  log_dir: '/home/yc/CVPR26/DiffSR/logs/fno2d'
+  log_dir: '/home/yc/CVPR26/DiffSR/logs/HiNOTE'
   wandb: True
-  wandb_project: 'DiffSR-FNO2d-ns2d'
+  wandb_project: 'DiffSR-HiNOTE-ns2d'

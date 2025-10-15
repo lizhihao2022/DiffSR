@@ -14,15 +14,15 @@ model:
   attn_drop_rate: 0.
   drop_path_rate: 0.1
   act: 'gelu'
-  upsample_factor: [2, 2]
+  upsample_factor: [4, 4]
 
 data:
   name: 'NavierStokes2D'
-  data_path: "/home/yc/CVPR_26_fluid_SR/DiffSR-main/NavierStokes_V1e-5_N1200_T20.mat"
-  sample_factor: 2
+  data_path: "/home/yc/CVPRR26/DiffSR/NavierStokes_V1e-5_N1200_T20.mat"
+  sample_factor: 4
   shape: [64, 64]
-  train_batchsize: 64
-  eval_batchsize: 64
+  train_batchsize: 512
+  eval_batchsize: 512
   train_ratio: 0.98
   valid_ratio: 0.01
   test_ratio: 0.01
@@ -60,6 +60,6 @@ schedule:
 log:
   verbose: True
   log: True
-  log_dir: '/home/yc/CVPR_26_fluid_SR/DiffSR-main/logs/'
+  log_dir: '/home/yc/CVPR26/DiffSR/logs/swin2d'
   wandb: True
-  wandb_project: 'DiffSR-Swin2d'
+  wandb_project: 'DiffSR-Swin2d-ns2d'

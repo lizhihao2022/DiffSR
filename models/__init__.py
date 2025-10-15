@@ -5,6 +5,9 @@ from .galerkin import Galerkin_Transformer
 from .MWT import MWT_SuperResolution
 from .sronet import SRNO
 from .swin_Transformer import SwinSR
+from .EDSR import EDSR_net
+from .HiNOTE import HiNOTE_net
+from .swinIR import SwinIR_net
 
 from . import ddpm
 from . import sr3
@@ -19,6 +22,9 @@ _model_dict = {
     "MWT2d": MWT_SuperResolution,
     "SRNO": SRNO,
     "Swin_Transformer": SwinSR,
+    "EDSR": EDSR_net,
+    "HiNOTE": HiNOTE_net,
+    "SwinIR": SwinIR_net,
     "DDPM": {
         "model": ddpm.UNet,
         "diffusion": ddpm.GaussianDiffusion,
