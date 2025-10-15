@@ -1,0 +1,108 @@
+model:
+  name: 'Resshift'
+
+resshift: 
+  model:
+    target: models.resshift.models.unet.UNetModelSwin
+    ckpt_path: ~
+    params:
+      image_size: 64
+      in_channels: 1
+      model_channels: 160
+      out_channels: 1
+      attention_resolutions: [64,32,16,8]
+      dropout: 0
+      channel_mult: [1, 2, 2, 4]
+      num_res_blocks: [2, 2, 2, 2]
+      conv_resample: True
+      dims: 2
+      use_fp16: False
+      num_head_channels: 32
+      use_scale_shift_norm: True
+      resblock_updown: False
+      swin_depth: 2
+      swin_embed_dim: 192
+      window_size: 8
+      mlp_ratio: 4
+      cond_lq: True
+      lq_size: 64
+
+  diffusion:
+    target: models.resshift.models.script_util.create_gaussian_diffusion
+    params:
+      sf: 4
+      schedule_name: exponential
+      schedule_kwargs:
+        power: 0.3
+      etas_end: 0.99
+      steps: 15
+      min_noise_level: 0.04
+      kappa: 2.0
+      weighted_mse: False
+      predict_type: xstart
+      timestep_respacing: ~
+      scale_factor: 1.0
+      normalize_input: False
+      latent_flag: False
+
+
+data:
+  name: 'NavierStokes2D'
+  data_path: "C:/Users/jjj/Desktop/program/lzh_program/code/NavierStokes_V1e-5_N1200_T20.mat"
+  sample_factor: 2
+  shape: [64, 64]
+  train_batchsize: 4
+  eval_batchsize: 4
+  train_ratio: 0.008
+  valid_ratio: 0.001
+  test_ratio: 0.001
+  subset: False
+  subset_ratio: 0.1
+  normalize: True
+  normalizer_type: 'PGN'
+
+train:
+  random_seed: 42
+  cuda: True
+  device: 0
+  epochs: 500
+  patience: 2
+  eval_freq: 2
+  saving_best: True
+  load_ckpt: False
+  ckpt_path: 'C:\Users\jjj\Desktop\program\lzh_program\code\DiffSR\logs\NavierStokes2D\10_15\Resshift_20_59_40\model_epoch_1.pth'
+  saving_ckpt: True
+  ckpt_freq: 2
+  ckpt_max: 3
+  distribute: False
+  distribute_mode: 'DDP'
+  device_ids: [0, 1, 2, 3]
+
+optimize:
+  optimizer: 'AdamW'
+  lr: 0.00001
+  weight_decay: 0.001
+
+schedule:
+  scheduler: 'StepLR'
+  step_size: 300
+  gamma: 0.5
+
+log:
+  verbose: True
+  log: False
+  log_dir: './logs'
+  wandb: False
+  wandb_project: ''
+
+beta_schedule:
+  train:
+    schedule: 'linear'
+    n_timestep: 2000
+    linear_start: 1e-4
+    linear_end: 2e-2
+  val:
+    schedule: 'linear'
+    n_timestep: 2000
+    linear_start: 1e-4
+    linear_end: 2e-2
