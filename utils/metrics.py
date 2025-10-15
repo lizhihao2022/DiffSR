@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from typing import Dict, List, Any
 from .loss import LossRecord
 
+import importlib
 
 @torch.no_grad()
 def mse(pred, target, *args, **kwargs):
@@ -83,3 +84,12 @@ class Evaluator:
             record.update(out)
 
         return out
+
+
+#用于resshift的模型构建函数：
+def get_obj_from_str(string, reload=False):
+    module, cls = string.rsplit(".", 1)
+    if reload:
+        module_imp = importlib.import_module(module)
+        importlib.reload(module_imp)
+    return getattr(importlib.import_module(module, package=None), cls)

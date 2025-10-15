@@ -8,7 +8,7 @@ from torch import nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from tqdm import tqdm
-from utils.loss import LossRecord, CompositeLoss, LpLoss
+from utils.loss import LossRecord, LpLoss,compositeloss
 from utils.helper import save_code
 from utils.ddp import debug_barrier
 from utils.metrics import Evaluator
@@ -43,12 +43,15 @@ class BaseTrainer:
         self.model = self.build_model()
         self.apply_init()
         
+        self.start_epoch = 0
+        self.optimizer = self.build_optimizer()
+        self.scheduler = self.build_scheduler()
+        
+
         if self.train_args.get('load_ckpt', False):
             self.load_ckpt(self.train_args['ckpt_path'])
-        else:
-            self.start_epoch = 0
-            self.optimizer = self.build_optimizer()
-            self.scheduler = self.build_scheduler()
+        
+
 
         self.model = self.model.to(self.device)
         
@@ -274,16 +277,15 @@ class BaseTrainer:
             self.model.load_state_dict(state)
         self.main_log("Load model from {}".format(model_path))
     
-    def load_ckpt(self, ckpt_path):
+    def load_ckpt(self, ckpt_path):        
         state = torch.load(ckpt_path, map_location="cpu")
-        if self.dist and self.dist_mode == 'DDP':
-            self.model.module.load_state_dict(state['model_state_dict'])
-        elif isinstance(self.model, torch.nn.DataParallel):
-            self.model.module.load_state_dict(state['model_state_dict'])
-        else:
-            self.model.load_state_dict(state['model_state_dict'])
         if 'optimizer_state_dict' in state:
             self.optimizer.load_state_dict(state['optimizer_state_dict'])
+            # ✅ 强制把optimizer中的状态迁移到GPU
+            for state_tensor in self.optimizer.state.values():
+                for k, v in state_tensor.items():
+                    if isinstance(v, torch.Tensor):
+                        state_tensor[k] = v.to(self.device)
         if 'scheduler_state_dict' in state and self.scheduler is not None:
             self.scheduler.load_state_dict(state['scheduler_state_dict'])
         self.start_epoch = state.get('epoch', 0) + 1
@@ -334,7 +336,7 @@ class BaseTrainer:
                     best_epoch = epoch
                     best_metrics = valid_metrics
                     if self.check_main_process() and self.saving_best:
-                        self.save_best(best_path)
+                        self.save_model(best_path)
                 elif self.patience != -1:
                     counter += 1
                     if counter >= self.patience:
@@ -357,7 +359,7 @@ class BaseTrainer:
         self.main_log("Optimization Finished!")
         
         if self.check_main_process() and not best_metrics:
-            self.save_best()
+            self.save_model(best_path)
         
         if self.dist and dist.is_initialized():
             dist.barrier()
@@ -424,7 +426,7 @@ class BaseTrainer:
         y = torch.cat(all_y, dim=0)
         y_pred = torch.cat(all_y_pred, dim=0)
         loss = self.loss_fn(y_pred, y)
-        loss_record.update({"{}_loss".format(split): loss.item()})
+        loss_record.update({"{}_loss".format(split): loss.item()},n=y.size(0))
         self.evaluator(y_pred, y, record=loss_record)
         if self.dist and dist.is_initialized():
             loss_record.dist_reduce()
