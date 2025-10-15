@@ -14,11 +14,11 @@ model:
 
 data:
   name: 'NavierStokes2D'
-  data_path: "/home/yc/CVPR_26_fluid_SR/DiffSR-main/NavierStokes_V1e-5_N1200_T20.mat"
+  data_path: "/home/yc/CVPR26/DiffSR/NavierStokes_V1e-5_N1200_T20.mat"
   sample_factor: 2
   shape: [64, 64]
-  train_batchsize: 128
-  eval_batchsize: 128
+  train_batchsize: 256
+  eval_batchsize: 256
   train_ratio: 0.98
   valid_ratio: 0.01
   test_ratio: 0.01
@@ -56,6 +56,6 @@ schedule:
 log:
   verbose: True
   log: True
-  log_dir: '/home/yc/CVPR_26_fluid_SR/DiffSR-main/logs/'
+  log_dir: '/home/yc/CVPR26/DiffSR/logs/galerikin2d'
   wandb: True
-  wandb_project: 'DiffSR-galerikin2d'
+  wandb_project: 'DiffSR-galerikin2d-ns2d'

@@ -1,24 +1,22 @@
 model:
-  name: 'FNO2d'
-  modes1: [15, 12, 9, 9, 9]
-  modes2: [15, 12, 9, 9, 9]
-  width: 64
-  fc_dim: 128
-  layers: [16, 24, 24, 32, 32]
-  in_dim: 2
-  out_dim: 2
-  act: 'gelu'
-  pos_dim: 2
-  upsample_factor: [4, 4]
+  name: 'EDSR'
+  in_channels: 1
+  out_channels: 1
+  hidden_channels: 128
+  n_res_blocks: 16
+  upscale_factor: 2
 
 data:
-  name: 'ERA5wind'
-  data_path: "/data/era_data/wind_uv.npy"
-  sample_factor: 4
-  shape: [512, 512]
-  train_batchsize: 16
-  eval_batchsize: 16
+  name: 'NavierStokes2D'
+  data_path: "/home/yc/CVPR26/DiffSR/NavierStokes_V1e-5_N1200_T20.mat"
+  sample_factor: 2
+  shape: [64, 64]
+  train_batchsize: 512
+  eval_batchsize: 512
   train_ratio: 0.98
+  # train_ratio: 0.2
+  # valid_ratio: 0.01
+  # test_ratio: 0.01
   valid_ratio: 0.01
   test_ratio: 0.01
   subset: False
@@ -55,6 +53,6 @@ schedule:
 log:
   verbose: True
   log: True
-  log_dir: '/home/yc/CVPR26/DiffSR/logs/ERA5wind'
+  log_dir: '/home/yc/CVPR26/DiffSR/logs/edsr2d'
   wandb: True
-  wandb_project: 'DiffSR-FNO2d-ERA5wind'
+  wandb_project: 'DiffSR-EDSR2d-ns2d'

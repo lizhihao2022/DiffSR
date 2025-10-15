@@ -1,0 +1,92 @@
+model:
+  name: 'SwinIR'
+  in_channels: 1
+  out_channels: 1
+
+  #图像尺寸参数
+  img_size: 16 #输入图像大小
+  patch_size: 1 # Patch 大小（SwinIR 通常为 1）
+
+  #Transformer参数
+  embed_dim: 120  # 嵌入维度
+  depths: [6, 6, 6, 6]  # 每个 stage 的深度
+  num_heads: [6, 6, 6, 6]  # 每个 stage 的注意力头数
+  window_size: 8  # 窗口大小
+  mlp_ratio: 2  # MLP 隐藏层倍率
+
+  #注意力机制参数
+  qkv_bias: True  # QKV 线性层是否使用偏置
+  qk_scale: null  # 如果为 null，使用 head_dim ** -0.5
+
+  #Dropout参数
+  drop_rate: 0.0  # Dropout 率
+  attn_drop_rate: 0.0  # 注意力 Dropout 率
+  drop_path_rate: 0.1  # Stochastic Depth 率
+
+  #归一化位置编码参数
+  ape: False  # 是否使用绝对位置编码
+  patch_norm: True  # Patch embedding 后是否归一化
+
+  #检查点参数
+  use_checkpoint: False  # 是否使用梯度检查点（节省显存）
+
+  #超分辨率参数
+  upscale_factor: 4  # 超分倍率
+  img_range: 1.0  # 图像范围
+  upsampler: 'pixelshuffle'  # 上采样器类型
+  resi_connection: '1conv'  # 残差连接类型
+
+  #数据归一化参数
+  mean: 0  # 数据均值
+  std: 1  # 数据标准差
+
+data:
+  name: 'NavierStokes2D'
+  data_path: "/home/yc/CVPR26/DiffSR/NavierStokes_V1e-5_N1200_T20.mat"
+  sample_factor: 4
+  shape: [64, 64]
+  train_batchsize: 8
+  eval_batchsize: 8
+  # train_ratio: 0.98
+  # valid_ratio: 0.01
+  # test_ratio: 0.01
+  train_ratio: 0.2
+  valid_ratio: 0.01
+  test_ratio: 0.01
+  subset: False
+  subset_ratio: 0.1
+  normalize: True
+  normalizer_type: 'PGN'
+
+train:
+  random_seed: 42
+  cuda: True
+  device: 0
+  epochs: 500
+  patience: 10
+  eval_freq: 5
+  saving_best: True
+  load_ckpt: False
+  saving_ckpt: True
+  ckpt_freq: 5
+  ckpt_max: 5
+  distribute: False
+  distribute_mode: 'DDP'
+  device_ids: [0, 1, 2, 3]
+
+optimize:
+  optimizer: 'AdamW'
+  lr: 0.001
+  weight_decay: 0.001
+
+schedule:
+  scheduler: 'StepLR'
+  step_size: 300
+  gamma: 0.5
+
+log:
+  verbose: True
+  log: True
+  log_dir: '/home/yc/CVPR26/DiffSR/logs/swinIR2d'
+  wandb: True
+  wandb_project: 'DiffSR-SwinIR2d-ns2d'
