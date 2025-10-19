@@ -2,6 +2,7 @@ import torch.nn as nn
 from .basics import SpectralConv2d, SpectralUpsampleConv2d
 from .utils import _get_act, add_padding2, remove_padding2
 import torch
+import math
 
 
 class Sine(torch.nn.Module):
@@ -63,7 +64,11 @@ class FNO2d(nn.Module):
                                  for in_size, out_size in zip(self.layers, self.layers[1:])])
         
         self.up_sp_conv = SpectralUpsampleConv2d(self.layers[0], self.layers[0], self.modes1[-1], self.modes2[-1], upsample_factor=self.upsample_factor)
-        self.up_ws = nn.ModuleList([nn.ConvTranspose2d(self.layers[0], self.layers[0], kernel_size=3, stride=2, padding=1, output_padding=1) for _ in range(self.upsample_factor[0]//2)])
+        # self.upsample_factor[0]//2 当前逻辑： 每次上采样2倍，做upsample_factor[0]//2次
+        # self.up_ws = nn.ModuleList([nn.ConvTranspose2d(self.layers[0], self.layers[0], kernel_size=3, stride=2, padding=1, output_padding=1) for _ in range(self.upsample_factor[0]//2)])
+        # 正确逻辑： 每次上采样2倍，做log2(upsample_factor[0])次，表示2的多少次方等于upsample_factor[0]
+        num_upsample_layers = int(math.log2(self.upsample_factor[0]))
+        self.up_ws = nn.ModuleList([nn.ConvTranspose2d(self.layers[0], self.layers[0], kernel_size=3, stride=2, padding=1, output_padding=1) for _ in range(num_upsample_layers)])
         self.up_ws = nn.Sequential(*self.up_ws)
         # self.up_ws = nn.ConvTranspose2d(self.layers[0], self.layers[0], kernel_size=3, stride=self.upsample_factor[0], padding=1, output_padding=1)
 

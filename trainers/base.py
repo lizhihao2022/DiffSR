@@ -400,7 +400,8 @@ class BaseTrainer:
         y = torch.cat(all_y, dim=0)
         y_pred = torch.cat(all_y_pred, dim=0)
         loss = self.loss_fn(y_pred, y)
-        loss_record.update({"{}_loss".format(split): loss.item()})
+        total_samples = y.size(0)
+        loss_record.update({"{}_loss".format(split): loss.item()}, n=total_samples)
         self.evaluator(y_pred, y, record=loss_record)
         if self.dist and dist.is_initialized():
             loss_record.dist_reduce()

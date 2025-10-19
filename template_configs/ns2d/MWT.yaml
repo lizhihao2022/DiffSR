@@ -10,12 +10,12 @@ model:
   L: 0
   base: 'legendre'
   act: 'gelu'
-  upsample_factor: [4, 4]
+  upsample_factor: [2, 2]
 
 data:
   name: 'NavierStokes2D'
   data_path: "/home/yc/CVPR26/DiffSR/NavierStokes_V1e-5_N1200_T20.mat"
-  sample_factor: 4
+  sample_factor: 2
   shape: [64, 64]
   train_batchsize: 512
   eval_batchsize: 512
@@ -39,9 +39,9 @@ train:
   saving_ckpt: True
   ckpt_freq: 5
   ckpt_max: 5
-  distribute: False
+  distribute: True
   distribute_mode: 'DDP'
-  device_ids: [1, 2, 3]
+  device_ids: [0, 5, 6, 7]
 
 optimize:
   optimizer: 'AdamW'
