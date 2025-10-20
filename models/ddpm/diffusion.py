@@ -6,6 +6,7 @@ from inspect import isfunction
 from functools import partial
 import numpy as np
 from tqdm import tqdm
+from utils.loss import LpLoss
 
 
 def _warmup_beta(linear_start, linear_end, n_timestep, warmup_frac):
@@ -96,10 +97,12 @@ class GaussianDiffusion(nn.Module):
             pass
 
     def set_loss(self, device):
-        if self.loss_type == 'l1':
-            self.loss_func = nn.L1Loss(reduction='sum').to(device)
+        if self.loss_type == 'lploss':
+            from utils.loss import LpLoss
+            self.loss_func = LpLoss()
         elif self.loss_type == 'l2':
-            self.loss_func = nn.MSELoss(reduction='sum').to(device)
+            # self.loss_func = nn.MSELoss(reduction='sum').to(device)
+            self.loss_func = LpLoss(reduction=True, size_average=False)
         else:
             raise NotImplementedError()
 

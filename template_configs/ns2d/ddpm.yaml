@@ -11,7 +11,7 @@ model:
   channels: 1
   conditional: True
   n_iter: 10000
-  loss_type: 'l1'
+  loss_type: 'lploss'
 
 data:
   name: 'NavierStokes2D'

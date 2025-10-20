@@ -85,8 +85,9 @@ class GaussianDiffusion(nn.Module):
             # self.set_new_noise_schedule(schedule_opt)
 
     def set_loss(self, device):
-        if self.loss_type == 'l1':
-            self.loss_func = nn.L1Loss(reduction='sum').to(device)
+        if self.loss_type == 'lploss':
+            from utils.loss import LpLoss
+            self.loss_func = LpLoss()
         elif self.loss_type == 'l2':
             self.loss_func = nn.MSELoss(reduction='sum').to(device)
         else:

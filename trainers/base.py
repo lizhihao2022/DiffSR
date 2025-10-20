@@ -8,7 +8,7 @@ from torch import nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from tqdm import tqdm
-from utils.loss import LossRecord, CompositeLoss, LpLoss
+from utils.loss import LossRecord, LpLoss,compositeloss
 from utils.helper import save_code
 from utils.ddp import debug_barrier
 from utils.metrics import Evaluator
@@ -43,9 +43,16 @@ class BaseTrainer:
         self.model = self.build_model()
         self.apply_init()
         
+        self.start_epoch = 0
+        self.optimizer = self.build_optimizer()
+        self.scheduler = self.build_scheduler()
+        
+
         if self.train_args.get('load_ckpt', False):
             self.load_ckpt(self.train_args['ckpt_path'])
-            self.main_log("Load model from {}".format(self.train_args['ckpt_path']))
+        
+
+
         self.model = self.model.to(self.device)
         
         if self.dist:
@@ -66,8 +73,6 @@ class BaseTrainer:
             if not p.is_contiguous():
                 p.data = p.data.contiguous()
         
-        self.optimizer = self.build_optimizer()
-        self.scheduler = self.build_scheduler()
         self.loss_fn = self.build_loss()
         self.evaluator = self.build_evaluator()
 
@@ -240,28 +245,51 @@ class BaseTrainer:
             model_to_save = self.model
         return {k: v.detach().cpu() for k, v in model_to_save.state_dict().items()}
     
-    def save_ckpt(self, epoch, best=False):
+    def save_ckpt(self, epoch):
         if not os.path.exists(self.saving_path):
             os.makedirs(self.saving_path)
         state_dict_cpu = self._get_state_dict_cpu()
-        if best:
-            torch.save(state_dict_cpu, os.path.join(self.saving_path, "best_model.pth"))
-        else:
-            torch.save(state_dict_cpu, os.path.join(self.saving_path, f"model_epoch_{epoch}.pth"))
-            if self.ckpt_max is not None and self.ckpt_max > 0:
-                ckpt_list = [f for f in os.listdir(self.saving_path) if f.startswith('model_epoch_') and f.endswith('.pth')]
-                if len(ckpt_list) > self.ckpt_max:
-                    ckpt_list.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
-                    os.remove(os.path.join(self.saving_path, ckpt_list[0]))
-    
-    def load_ckpt(self, ckpt_path):
-        state = torch.load(ckpt_path, map_location="cpu")
+        
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': state_dict_cpu,
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'scheduler_state_dict': self.scheduler.state_dict(),
+        }, os.path.join(self.saving_path, f"model_epoch_{epoch}.pth"))
+        if self.ckpt_max is not None and self.ckpt_max > 0:
+            ckpt_list = [f for f in os.listdir(self.saving_path) if f.startswith('model_epoch_') and f.endswith('.pth')]
+            if len(ckpt_list) > self.ckpt_max:
+                ckpt_list.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
+                os.remove(os.path.join(self.saving_path, ckpt_list[0]))
+                    
+    def save_model(self, model_path):
+        state_dict_cpu = self._get_state_dict_cpu()
+        torch.save(state_dict_cpu, model_path)
+        self.main_log("Save model to {}".format(model_path))
+        
+    def load_model(self, model_path):
+        state = torch.load(model_path, map_location="cpu")
         if self.dist and self.dist_mode == 'DDP':
             self.model.module.load_state_dict(state)
         elif isinstance(self.model, torch.nn.DataParallel):
             self.model.module.load_state_dict(state)
         else:
             self.model.load_state_dict(state)
+        self.main_log("Load model from {}".format(model_path))
+    
+    def load_ckpt(self, ckpt_path):        
+        state = torch.load(ckpt_path, map_location="cpu")
+        if 'optimizer_state_dict' in state:
+            self.optimizer.load_state_dict(state['optimizer_state_dict'])
+            # ✅ 强制把optimizer中的状态迁移到GPU
+            for state_tensor in self.optimizer.state.values():
+                for k, v in state_tensor.items():
+                    if isinstance(v, torch.Tensor):
+                        state_tensor[k] = v.to(self.device)
+        if 'scheduler_state_dict' in state and self.scheduler is not None:
+            self.scheduler.load_state_dict(state['scheduler_state_dict'])
+        self.start_epoch = state.get('epoch', 0) + 1
+        self.main_log("Load checkpoint from {}, epoch {}".format(ckpt_path, state.get('epoch', 'N/A')))
     
     def check_main_process(self):
         if self.dist is False:
@@ -284,9 +312,9 @@ class BaseTrainer:
         counter = 0
         if dist.is_initialized():
             dist.barrier()
-        bar = tqdm(total=self.epochs) if self.check_main_process() else None
-        
-        for epoch in range(self.epochs):
+        bar = tqdm(total=self.epochs - self.start_epoch) if self.check_main_process() else None
+
+        for epoch in range(self.start_epoch, self.epochs):
             train_loss_record = self.train(epoch)
             self.main_log("Epoch {} | {} | lr: {:.4f}".format(epoch, train_loss_record, self.optimizer.param_groups[0]["lr"]))
             if self.check_main_process() and self.wandb:
@@ -308,8 +336,7 @@ class BaseTrainer:
                     best_epoch = epoch
                     best_metrics = valid_metrics
                     if self.check_main_process() and self.saving_best:
-                        self.save_ckpt(epoch, best=True)
-                    self.main_log("Epoch {} | save best models in {}".format(epoch, best_path))
+                        self.save_model(best_path)
                 elif self.patience != -1:
                     counter += 1
                     if counter >= self.patience:
@@ -332,13 +359,12 @@ class BaseTrainer:
         self.main_log("Optimization Finished!")
         
         if self.check_main_process() and not best_metrics:
-            self.save_ckpt(self.epochs - 1, best=True)
+            self.save_model(best_path)
         
         if self.dist and dist.is_initialized():
             dist.barrier()
         
-        self.load_ckpt(best_path)
-        self.main_log("Load best models at epoch {} from {}".format(best_epoch, best_path))
+        self.load_model(best_path)
 
         valid_loss_record = self.evaluate(split="valid")
         self.main_log("Valid metrics: {}".format(valid_loss_record))
