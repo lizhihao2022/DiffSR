@@ -4,12 +4,12 @@ model:
   out_channels: 1
   hidden_channels: 128
   n_res_blocks: 16
-  upscale_factor: 2
+  upscale_factor: 4
 
 data:
   name: 'NavierStokes2D'
   data_path: "/home/yc/CVPR26/DiffSR/NavierStokes_V1e-5_N1200_T20.mat"
-  sample_factor: 2
+  sample_factor: 4
   shape: [64, 64]
   train_batchsize: 512
   eval_batchsize: 512
@@ -36,7 +36,7 @@ train:
   saving_ckpt: True
   ckpt_freq: 5
   ckpt_max: 5
-  distribute: False
+  distribute: True
   distribute_mode: 'DDP'
   device_ids: [0, 1, 2, 3]
 
@@ -55,4 +55,4 @@ log:
   log: True
   log_dir: '/home/yc/CVPR26/DiffSR/logs/edsr2d'
   wandb: True
-  wandb_project: 'DiffSR-EDSR2d-ns2d'
+  wandb_project: 'DiffSR-EDSR2d-ERA5wind2d'

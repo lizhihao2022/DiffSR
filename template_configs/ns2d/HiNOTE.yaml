@@ -17,12 +17,9 @@ data:
   data_path: "/home/yc/CVPR26/DiffSR/NavierStokes_V1e-5_N1200_T20.mat"
   sample_factor: 4
   shape: [64, 64]
-  train_batchsize: 8
-  eval_batchsize: 8
-  # train_ratio: 0.98
-  # valid_ratio: 0.01
-  # test_ratio: 0.01
-  train_ratio: 0.2
+  train_batchsize: 128
+  eval_batchsize: 128
+  train_ratio: 0.98
   valid_ratio: 0.01
   test_ratio: 0.01
   subset: False
