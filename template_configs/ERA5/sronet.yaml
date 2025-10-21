@@ -13,17 +13,19 @@ model:
     res_scale: 1.0
     scale: 2
     no_upsampling: True
-    input_channels: 1
+    input_channels: 2   #Attention:the same with data input channel
     output_channels: 64
 
 
 data:
-  name: 'NavierStokes2D'
-  data_path: "/home/yc/CVPR26/DiffSR/NavierStokes_V1e-5_N1200_T20.mat"
-  sample_factor: 2
-  shape: [64, 64]
-  train_batchsize: 128
-  eval_batchsize: 128
+  name: 'ERA5'
+  data_path: "/data/era_data/ERA5_DATA_for_CVPR26/ERA5wind_uo_128_128_subset_5000.npy"
+  # data_path: "/data/era_data/ERA5_DATA_for_CVPR26/ERA5wind_vo_128_128_subset_5000.npy"
+  # data_path: "/data/era_data/ERA5_DATA_for_CVPR26/ERA5temperature_128_128_subset_5000.npy"
+  sample_factor: 4
+  shape: [128, 128]
+  train_batchsize: 256
+  eval_batchsize: 256
   train_ratio: 0.98
   valid_ratio: 0.01
   test_ratio: 0.01
@@ -44,9 +46,9 @@ train:
   saving_ckpt: True
   ckpt_freq: 5
   ckpt_max: 5
-  distribute: True
+  distribute: False
   distribute_mode: 'DDP'
-  device_ids: [1, 2, 3 , 4]
+  device_ids: [0, 1, 2, 3]
 
 optimize:
   optimizer: 'AdamW'
@@ -61,6 +63,11 @@ schedule:
 log:
   verbose: True
   log: True
-  log_dir: '/home/yc/CVPR26/DiffSR/logs/sronet2d'
+  log_dir: '/home/yc/CVPR26/DiffSR/logs/ERA5_uo/sronet'
+  # log_dir: '/home/yc/CVPR26/DiffSR/logs/ERA5_vo/sronet'
+  # log_dir: '/home/yc/CVPR26/DiffSR/logs/ERA5_temp/sronet'
   wandb: True
-  wandb_project: 'DiffSR-SRNO2d-ns2d'
+  wandb_project: 'DiffSR-sronet-ERA5_uo'
+  # wandb_project: 'DiffSR-sronet-ERA5_vo'
+  # wandb_project: 'DiffSR-sronet-ERA5_temp'
+

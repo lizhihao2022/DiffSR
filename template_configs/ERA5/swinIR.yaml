@@ -4,7 +4,7 @@ model:
   out_channels: 1
 
   #图像尺寸参数
-  img_size: 16 #输入图像大小
+  img_size: 32 #输入图像大小 主要修改
   patch_size: 1 # Patch 大小（SwinIR 通常为 1）
 
   #Transformer参数
@@ -31,7 +31,7 @@ model:
   use_checkpoint: False  # 是否使用梯度检查点（节省显存）
 
   #超分辨率参数
-  upscale_factor: 4  # 超分倍率
+  upscale_factor: 4  # 超分倍率 主要修改
   img_range: 1.0  # 图像范围
   upsampler: 'pixelshuffle'  # 上采样器类型
   resi_connection: '1conv'  # 残差连接类型
@@ -41,12 +41,14 @@ model:
   std: 1  # 数据标准差
 
 data:
-  name: 'NavierStokes2D'
-  data_path: "/home/yc/CVPR26/DiffSR/NavierStokes_V1e-5_N1200_T20.mat"
+  name: 'ERA5'
+  data_path: "/data/era_data/ERA5_DATA_for_CVPR26/ERA5wind_uo_128_128_subset_5000.npy"
+  # data_path: "/data/era_data/ERA5_DATA_for_CVPR26/ERA5wind_vo_128_128_subset_5000.npy"
+  # data_path: "/data/era_data/ERA5_DATA_for_CVPR26/ERA5temperature_128_128_subset_5000.npy"
   sample_factor: 4
-  shape: [64, 64]
-  train_batchsize: 128
-  eval_batchsize: 128
+  shape: [128, 128]
+  train_batchsize: 100
+  eval_batchsize: 100
   train_ratio: 0.98
   valid_ratio: 0.01
   test_ratio: 0.01
@@ -69,7 +71,7 @@ train:
   ckpt_max: 5
   distribute: True
   distribute_mode: 'DDP'
-  device_ids: [3,4,5,6]
+  device_ids: [0, 1, 2, 3]
 
 optimize:
   optimizer: 'AdamW'
@@ -84,6 +86,11 @@ schedule:
 log:
   verbose: True
   log: True
-  log_dir: '/home/yc/CVPR26/DiffSR/logs/swinIR2d'
+  log_dir: '/home/yc/CVPR26/DiffSR/logs/ERA5_uo/swinIR'
+  # log_dir: '/home/yc/CVPR26/DiffSR/logs/ERA5_vo/swinIR'
+  # log_dir: '/home/yc/CVPR26/DiffSR/logs/ERA5_temp/swinIR'
   wandb: True
-  wandb_project: 'DiffSR-SwinIR2d-ns2d'
+  wandb_project: 'DiffSR-swinIR-ERA5_uo'
+  # wandb_project: 'DiffSR-swinIR-ERA5_vo'
+  # wandb_project: 'DiffSR-swinIR-ERA5_temp'
+

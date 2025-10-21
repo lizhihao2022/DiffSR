@@ -1,24 +1,25 @@
 model:
-  name: 'Galerkin_Transformer'
+  name: 'FNO2d'
+  modes1: [15, 12, 9, 9, 9]
+  modes2: [15, 12, 9, 9, 9]
+  width: 64
+  fc_dim: 128
+  layers: [16, 24, 24, 32, 32]
   in_dim: 1
   out_dim: 1
-  ref: 8
-  # n_hidden: 256
-  n_hidden: 96
-  n_layers: 6
-  n_heads: 8
-  dropout: 0.0
-  mlp_ratio: 4
   act: 'gelu'
+  pos_dim: 2
   upsample_factor: [4, 4]
 
 data:
-  name: 'NavierStokes2D'
-  data_path: "/home/yc/CVPR26/DiffSR/NavierStokes_V1e-5_N1200_T20.mat"
+  name: 'Ocean'
+  data_path: "/data/global_ocean_surface_velocity/ocean_uovo_128_128_1997_subset5000.h5"
+  data_key: 'uo_data'
+  # data_key: 'vo_data'
   sample_factor: 4
-  shape: [64, 64]
-  train_batchsize: 128
-  eval_batchsize: 128
+  shape: [128, 128]
+  train_batchsize: 256
+  eval_batchsize: 256
   train_ratio: 0.98
   valid_ratio: 0.01
   test_ratio: 0.01
@@ -30,7 +31,7 @@ data:
 train:
   random_seed: 42
   cuda: True
-  device: 2
+  device: 0
   epochs: 500
   patience: 10
   eval_freq: 5
@@ -39,7 +40,7 @@ train:
   saving_ckpt: True
   ckpt_freq: 5
   ckpt_max: 5
-  distribute: True
+  distribute: False
   distribute_mode: 'DDP'
   device_ids: [0, 1, 2, 3]
 
@@ -56,6 +57,8 @@ schedule:
 log:
   verbose: True
   log: True
-  log_dir: '/home/yc/CVPR26/DiffSR/logs/galerikin2d'
+  log_dir: '/home/yc/CVPR26/DiffSR/logs/Ocean/uo_data_FNO2d'
+  # log_dir: '/home/yc/CVPR26/DiffSR/logs/Ocean/vo_data_FNO2d'
   wandb: True
-  wandb_project: 'DiffSR-galerikin2d-ns2d'
+  wandb_project: 'DiffSR-FNO2d-Ocean_uo'
+  # wandb_project: 'DiffSR-FNO2d-Ocean_vo'
