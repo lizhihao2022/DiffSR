@@ -12,6 +12,7 @@ from .swinIR import SwinIR_net
 from . import ddpm
 from . import sr3
 from . import mg_ddpm
+from . import remig
 
 
 _model_dict = {
@@ -33,10 +34,10 @@ _model_dict = {
         "model": sr3.UNet,
         "diffusion": sr3.GaussianDiffusion,
     },
-    # "WDNO": {
-    #     "model": wdno.Unet3D_with_Conv3D,
-    #     "diffusion": wdno.GaussianDiffusion,
-    # },
+    "ReMiG": {
+        "model": remig.UNetModelSwin,
+        "diffusion": remig.GaussianDiffusion,
+    },
 }
 
 _ddpm_dict = {
@@ -51,5 +52,9 @@ _ddpm_dict = {
     "MG-DDPM": {
         "model": mg_ddpm.M2NO2d,
         "diffusion": mg_ddpm.GaussianDiffusion,
+    },
+    "ReMiG": {
+        "model": remig.UNetModelSwin,
+        "diffusion": remig.GaussianDiffusion,
     },
 }

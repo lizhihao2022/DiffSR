@@ -882,7 +882,6 @@ class UNetModelSwin(nn.Module):
             lq = self.feature_extractor(lq.type(self.dtype))
             x = th.cat([x, lq], dim=1)
 
-
         h = x.type(self.dtype)
         for ii, module in enumerate(self.input_blocks):
             h = module(h, emb)

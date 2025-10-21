@@ -49,7 +49,7 @@ class ResshiftTrainer(BaseTrainer):
                     )
 
             model_kwargs = {'lq':micro_data['lq'],}
-                        
+
             compute_losses = functools.partial(
                 self.base_diffusion.training_losses,
                 self.model,
@@ -64,9 +64,8 @@ class ResshiftTrainer(BaseTrainer):
             losses, z0_pred, z_t = compute_losses()
             
             loss = losses['mse']
-            print(f"epoch:{epoch}, iter:{i}, loss:{loss.item():.6f}")
+            # print(f"epoch:{epoch}, iter:{i}, loss:{loss.item():.6f}")
             loss_record.update({"train_loss": loss}, n=B)
-            
             
             self.optimizer.zero_grad()
             loss.backward()

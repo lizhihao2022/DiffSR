@@ -98,7 +98,6 @@ class GaussianDiffusion(nn.Module):
 
     def set_loss(self, device):
         if self.loss_type == 'lploss':
-            from utils.loss import LpLoss
             self.loss_func = LpLoss()
         elif self.loss_type == 'l2':
             # self.loss_func = nn.MSELoss(reduction='sum').to(device)

@@ -8,7 +8,7 @@ from torch import nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from tqdm import tqdm
-from utils.loss import LossRecord, LpLoss,compositeloss
+from utils.loss import LossRecord, LpLoss
 from utils.helper import save_code
 from utils.ddp import debug_barrier
 from utils.metrics import Evaluator
