@@ -44,6 +44,15 @@ resshift:
       scale_factor: 1.0
       normalize_input: False
       latent_flag: False
+      m2no_params:
+        in_channels: 1
+        base_channels: 64
+        k: 4
+        c: 4
+        grid_levels: [1, 1, 1]
+        resolutions: [64, 64]
+        bias: True
+        padding_mode: 'zeros' 
 
 data:
   name: 'NavierStokes2D'

@@ -234,6 +234,7 @@ class GaussianDiffusion:
         kappa,
         model_mean_type,
         loss_type,
+        m2no_params=None,
         sf=4,
         scale_factor=None,
         normalize_input=True,
@@ -281,16 +282,7 @@ class GaussianDiffusion:
         # self.weight_loss_mse = np.append(weight_loss_mse[1],  weight_loss_mse[1:])
         self.weight_loss_mse = weight_loss_mse
         
-        self.S = M2NO2d({
-            'in_channels': 1,
-            'base_channels': 64,
-            'k': 4,
-            'c': 4,
-            'grid_levels': [1, 1, 1],
-            'resolutions': (64, 64),
-            'bias': True,
-            'padding_mode': 'zeros'
-        })
+        self.S = M2NO2d(m2no_params)
         
         self.lambda_sched = LambdaSched(
             T=self.num_timesteps,
