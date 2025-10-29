@@ -2,7 +2,7 @@ import argparse
 import inspect
 
 from . import gaussian_diffusion as gd
-from .respace import SpacedDiffusion, space_timesteps, SpacedDiffusionDDPM
+from .respace import SpacedDiffusion, space_timesteps
 
 def create_gaussian_diffusion(
     *,
@@ -52,41 +52,4 @@ def create_gaussian_diffusion(
         normalize_input=normalize_input,
         sf=sf,
         latent_flag=latent_flag,
-    )
-
-def create_gaussian_diffusion_ddpm(
-    *,
-    beta_start,
-    beta_end,
-    sf=4,
-    steps=1000,
-    learn_sigma=False,
-    sigma_small=False,
-    noise_schedule="linear",
-    predict_xstart=False,
-    timestep_respacing=None,
-    scale_factor=1.0,
-):
-    betas = gd.get_named_beta_schedule(noise_schedule, steps, beta_start, beta_end)
-    if timestep_respacing is None:
-        timestep_respacing = steps
-    else:
-        assert isinstance(timestep_respacing, int)
-    return SpacedDiffusionDDPM(
-        use_timesteps=space_timesteps(steps, timestep_respacing),
-        betas=betas,
-        model_mean_type=(
-            gd.ModelMeanType.EPSILON if not predict_xstart else gd.ModelMeanType.START_X
-        ),
-        model_var_type=(
-            (
-                gd.ModelVarTypeDDPM.FIXED_LARGE
-                if not sigma_small
-                else gd.ModelVarTypeDDPM.FIXED_SMALL
-            )
-            if not learn_sigma
-            else gd.ModelVarTypeDDPM.LEARNED_RANGE
-        ),
-        scale_factor=scale_factor,
-        sf=sf,
     )
